@@ -1,0 +1,233 @@
+// ResQ — Prisma schema
+// Generated from the finalized ERD. Tables, fields, and relationships
+// mirror the ERD exactly. Database column/table names are kept snake_case
+// via @map()/@@map(); Prisma model/field names use the idiomatic camelCase.
+//
+// Docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------------------
+// Enums
+// ---------------------------------------------------------------------------
+
+enum UserRole {
+  USER
+  ADMIN
+
+  @@map("user_role")
+}
+
+enum GuideCategory {
+  SAFETY
+  FIRST_AID
+  DISASTER
+  EMERGENCY
+
+  @@map("guide_category")
+}
+
+enum IncidentCategory {
+  CRIME
+  ACCIDENT
+  FIRE
+  MEDICAL
+  DISASTER
+  SUSPICIOUS
+  OTHER
+
+  @@map("incident_category")
+}
+
+enum NotificationType {
+  REPORT
+  FRIEND_REQUEST
+  FRIEND_ACCEPTED
+  SHARE_SESSION
+  SYSTEM
+
+  @@map("notification_type")
+}
+
+enum FriendshipStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+
+  @@map("friendship_status")
+}
+
+enum MediaType {
+  IMAGE
+  VIDEO
+
+  @@map("media_type")
+}
+
+// ---------------------------------------------------------------------------
+// Models
+// ---------------------------------------------------------------------------
+
+model User {
+  id             String   @id @default(uuid())
+  fullName       String   @map("full_name") @db.VarChar(255)
+  username       String   @unique @db.VarChar(100)
+  email          String   @unique @db.VarChar(255)
+  phoneNumber    String   @unique @map("phone_number") @db.VarChar(20)
+  password       String   @db.VarChar(255)
+  profilePicture String?  @map("profile_picture")
+  role           UserRole
+  isVerified     Boolean  @map("is_verified")
+  lastLatitude   Decimal? @map("last_latitude") @db.Decimal(10, 7)
+  lastLongitude  Decimal? @map("last_longitude") @db.Decimal(10, 7)
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  refreshTokens         RefreshToken[] // has
+  emergencyContacts     EmergencyContact[] // owns
+  incidentReports       IncidentReport[] // creates
+  receivedNotifications Notification[]     @relation("NotificationReceiver") // receives
+  sentNotifications     Notification[]     @relation("NotificationSender") // sends
+  friendshipsRequested  Friendship[]       @relation("FriendshipRequester") // requester
+  friendshipsReceived   Friendship[]       @relation("FriendshipAddressee") // addressee
+  ownedSharingSessions  SharingSession[]   @relation("SharingSessionOwner") // owner
+  viewedSharingSessions SharingSession[]   @relation("SharingSessionViewer") // viewer
+
+  @@map("user")
+}
+
+model Guide {
+  id        String        @id @default(uuid())
+  title     String        @db.VarChar(255)
+  category  GuideCategory
+  content   String
+  thumbnail String?
+  createdAt DateTime      @default(now()) @map("created_at")
+  updatedAt DateTime      @updatedAt @map("updated_at")
+
+  @@map("guide")
+}
+
+model RefreshToken {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  token     String
+  expiresAt DateTime @map("expires_at")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("refresh_token")
+}
+
+model EmergencyContact {
+  id          String   @id @default(uuid())
+  userId      String   @map("user_id")
+  contactName String   @map("contact_name") @db.VarChar(255)
+  phoneNumber String   @map("phone_number") @db.VarChar(20)
+  priority    Int      @db.SmallInt
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("emergency_contact")
+}
+
+model IncidentReport {
+  id          String           @id @default(uuid())
+  userId      String           @map("user_id")
+  category    IncidentCategory
+  title       String           @db.VarChar(255)
+  description String?
+  latitude    Decimal          @db.Decimal(10, 7)
+  longitude   Decimal          @db.Decimal(10, 7)
+  createdAt   DateTime         @default(now()) @map("created_at")
+  updatedAt   DateTime         @updatedAt @map("updated_at")
+
+  // Relations
+  user  User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  media ReportMedia[] // contains
+
+  @@index([userId])
+  @@map("incident_report")
+}
+
+model ReportMedia {
+  id        String    @id @default(uuid())
+  reportId  String    @map("report_id")
+  mediaUrl  String    @map("media_url")
+  mediaType MediaType @map("media_type")
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  // Relations
+  report IncidentReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
+
+  @@index([reportId])
+  @@map("report_media")
+}
+
+model Notification {
+  id        String           @id @default(uuid())
+  userId    String           @map("user_id")
+  senderId  String?          @map("sender_id")
+  type      NotificationType
+  title     String           @db.VarChar(255)
+  message   String
+  isRead    Boolean          @map("is_read")
+  createdAt DateTime         @default(now()) @map("created_at")
+
+  // Relations
+  user   User  @relation("NotificationReceiver", fields: [userId], references: [id], onDelete: Cascade) // receives
+  sender User? @relation("NotificationSender", fields: [senderId], references: [id]) // sends
+
+  @@index([userId])
+  @@index([senderId])
+  @@map("notification")
+}
+
+model Friendship {
+  id          String           @id @default(uuid())
+  requesterId String           @map("requester_id")
+  addresseeId String           @map("addressee_id")
+  status      FriendshipStatus
+  createdAt   DateTime         @default(now()) @map("created_at")
+  updatedAt   DateTime         @updatedAt @map("updated_at")
+
+  // Relations
+  requester User @relation("FriendshipRequester", fields: [requesterId], references: [id], onDelete: Cascade)
+  addressee User @relation("FriendshipAddressee", fields: [addresseeId], references: [id], onDelete: Cascade)
+  
+  @@unique([requesterId, addresseeId])
+  @@index([requesterId])
+  @@index([addresseeId])
+  @@map("friendship")
+}
+
+model SharingSession {
+  id        String    @id @default(uuid())
+  ownerId   String    @map("owner_id")
+  viewerId  String    @map("viewer_id")
+  isActive  Boolean   @map("is_active")
+  startedAt DateTime  @default(now()) @map("started_at")
+  endedAt   DateTime? @map("ended_at")
+
+  // Relations
+  owner  User @relation("SharingSessionOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  viewer User @relation("SharingSessionViewer", fields: [viewerId], references: [id], onDelete: Cascade)
+
+  @@index([ownerId])
+  @@index([viewerId])
+  @@map("sharing_session")
+}
