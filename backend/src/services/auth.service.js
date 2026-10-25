@@ -6,6 +6,7 @@
 
 const jwt = require("jsonwebtoken");
 const prisma = require("../config/prisma");
+const { ServiceError } = require("../utils/service-error");
 const { hashPassword, comparePassword } = require("../utils/hash");
 const {
   signAccessToken,
@@ -30,19 +31,6 @@ function toPublicUser(user) {
   if (!user) return user;
   const { password, ...safe } = user;
   return safe;
-}
-
-/**
- * Error thrown by the service layer with an HTTP-ish status code and optional
- * field-level details. Controllers map this to a standardized JSON response.
- */
-class ServiceError extends Error {
-  constructor(message, statusCode = 400, errors = null) {
-    super(message);
-    this.name = "ServiceError";
-    this.statusCode = statusCode;
-    this.errors = errors;
-  }
 }
 
 /**

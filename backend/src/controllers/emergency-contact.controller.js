@@ -1,9 +1,12 @@
 // Emergency contact controller.
 //
 // Thin HTTP layer: validates input, delegates to the service, and shapes the
-// response. No business logic here.
+// response. No business logic here. Handlers are wrapped with asyncHandler, so
+// thrown ServiceErrors (and any unexpected error) propagate to the global
+// error handler, which produces the standardized error response.
 
 const { sendSuccess, sendError } = require("../utils/response");
+const { asyncHandler } = require("../utils/async-handler");
 const emergencyContactService = require("../services/emergency-contact.service");
 const {
   validateCreateEmergencyContact,
@@ -11,119 +14,85 @@ const {
 } = require("../validations/emergency-contact.validation");
 
 /**
- * Map a thrown error to a standardized error response.
- */
-function handleError(res, error, context) {
-  if (error instanceof emergencyContactService.ServiceError) {
-    return sendError(res, {
-      statusCode: error.statusCode,
-      message: error.message,
-      errors: error.errors,
-    });
-  }
-  console.error(`${context} error:`, error);
-  return sendError(res, {
-    statusCode: 500,
-    message: "Something went wrong.",
-  });
-}
-
-/**
  * POST /api/emergency-contacts
  */
-async function create(req, res) {
-  try {
-    const { valid, errors, data } = validateCreateEmergencyContact(req.body);
-    if (!valid) {
-      return sendError(res, {
-        statusCode: 422,
-        message: "Validation failed.",
-        errors,
-      });
-    }
-
-    const contact = await emergencyContactService.createEmergencyContact(
-      req.user.id,
-      data
-    );
-
-    return sendSuccess(res, {
-      statusCode: 201,
-      message: "Emergency contact created successfully.",
-      data: contact,
+const create = asyncHandler(async (req, res) => {
+  const { valid, errors, data } = validateCreateEmergencyContact(req.body);
+  if (!valid) {
+    return sendError(res, {
+      statusCode: 422,
+      message: "Validation failed.",
+      errors,
     });
-  } catch (error) {
-    return handleError(res, error, "Create emergency contact");
   }
-}
+
+  const contact = await emergencyContactService.createEmergencyContact(
+    req.user.id,
+    data
+  );
+
+  return sendSuccess(res, {
+    statusCode: 201,
+    message: "Emergency contact created successfully.",
+    data: contact,
+  });
+});
 
 /**
  * GET /api/emergency-contacts
  */
-async function list(req, res) {
-  try {
-    const contacts = await emergencyContactService.getEmergencyContacts(
-      req.user.id
-    );
+const list = asyncHandler(async (req, res) => {
+  const contacts = await emergencyContactService.getEmergencyContacts(
+    req.user.id
+  );
 
-    return sendSuccess(res, {
-      statusCode: 200,
-      message: "Emergency contacts retrieved successfully.",
-      data: contacts,
-    });
-  } catch (error) {
-    return handleError(res, error, "List emergency contacts");
-  }
-}
+  return sendSuccess(res, {
+    statusCode: 200,
+    message: "Emergency contacts retrieved successfully.",
+    data: contacts,
+  });
+});
 
 /**
  * PUT /api/emergency-contacts/:id
  */
-async function update(req, res) {
-  try {
-    const { valid, errors, data } = validateUpdateEmergencyContact(req.body);
-    if (!valid) {
-      return sendError(res, {
-        statusCode: 422,
-        message: "Validation failed.",
-        errors,
-      });
-    }
-
-    const contact = await emergencyContactService.updateEmergencyContact(
-      req.user.id,
-      req.params.id,
-      data
-    );
-
-    return sendSuccess(res, {
-      statusCode: 200,
-      message: "Emergency contact updated successfully.",
-      data: contact,
+const update = asyncHandler(async (req, res) => {
+  const { valid, errors, data } = validateUpdateEmergencyContact(req.body);
+  if (!valid) {
+    return sendError(res, {
+      statusCode: 422,
+      message: "Validation failed.",
+      errors,
     });
-  } catch (error) {
-    return handleError(res, error, "Update emergency contact");
   }
-}
+
+  const contact = await emergencyContactService.updateEmergencyContact(
+    req.user.id,
+    req.params.id,
+    data
+  );
+
+  return sendSuccess(res, {
+    statusCode: 200,
+    message: "Emergency contact updated successfully.",
+    data: contact,
+  });
+});
 
 /**
  * DELETE /api/emergency-contacts/:id
  */
-async function remove(req, res) {
-  try {
-    await emergencyContactService.deleteEmergencyContact(
-      req.user.id,
-      req.params.id
-    );
+const remove = asyncHandler(async (req, res) => {
+  await emergencyContactService.deleteEmergencyContact(
+    req.user.id,
+    req.params.id
+  );
 
-    return sendSuccess(res, {
-      statusCode: 200,
-      message: "Emergency contact deleted successfully.",
-    });
-  } catch (error) {
-    return handleError(res, error, "Delete emergency contact");
-  }
-}
+  return sendSuccess(res, {
+    statusCode: 200,
+    message: "Emergency contact deleted successfully.",
+  });
+});
 
 module.exports = {
   create,

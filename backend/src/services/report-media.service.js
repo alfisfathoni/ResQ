@@ -11,15 +11,7 @@ const {
   deleteAsset,
   publicIdFromUrl,
 } = require("../utils/cloudinary");
-
-class ServiceError extends Error {
-  constructor(message, statusCode = 400, errors = null) {
-    super(message);
-    this.name = "ServiceError";
-    this.statusCode = statusCode;
-    this.errors = errors;
-  }
-}
+const { ServiceError } = require("../utils/service-error");
 
 const MEDIA_FIELDS = {
   id: true,

@@ -4,19 +4,7 @@
 // contact service pattern, including a ServiceError carrying an HTTP status.
 
 const prisma = require("../config/prisma");
-
-/**
- * Error thrown by the service layer with an HTTP-ish status code and optional
- * field-level details. Controllers map this to a standardized JSON response.
- */
-class ServiceError extends Error {
-  constructor(message, statusCode = 400, errors = null) {
-    super(message);
-    this.name = "ServiceError";
-    this.statusCode = statusCode;
-    this.errors = errors;
-  }
-}
+const { ServiceError } = require("../utils/service-error");
 
 const REPORT_FIELDS = {
   id: true,
