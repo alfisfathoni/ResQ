@@ -8,7 +8,7 @@
 ## Ringkasan (kondisi backend saat ini)
 
 Backend ResQ kini memiliki **sembilan modul fitur yang berfungsi penuh** end-to-end (route → controller → service → validasi → Prisma):
-**Authentication (termasuk User Profile)**, **Emergency Contact**, **Incident Report**, **Report Media**, **Guide**, **Friendship**, **Notification**, **Sharing Session**, dan **User Utility**. Semua model di `prisma/schema.prisma` sudah memiliki API.
+**Authentication (termasuk User Profile)**, **Emergency Contact**, **Incident Report**, **Report Media**, **Guide**, **Friendship**, **Notification**, **Sharing Session**, dan **User Utility**. Semua model lama sudah memiliki API; SosAlert, Facility, ReportLike, ReportComment sudah ada di skema dan akan mendapat API di tugas roadmap 1.3, 2.1, dan 3.1.
 
 Infrastruktur lintas-sistem juga sudah matang:
 - **Global error handler** (`middleware/error.middleware.js`) terpasang paling akhir di `app.js`.
@@ -67,6 +67,14 @@ Legenda status:
 | **Swagger / OpenAPI** | ⬜ | Belum ada dependency maupun setup di `app.js`. = Phase 2 Item 3. |
 | **Testing** | ⬜ | Belum ada framework test, file test, atau script `test` di `package.json`. |
 | **Documentation** | ✅ | Folder `docs/` diaudit ulang & disinkronkan dengan kode pada tanggal di atas. |
+| **R-1.1 Migrasi skema** | ✅ | Migrasi tunggal `resq_extend_schema`: model baru `SosAlert`, `Facility`, `ReportLike`, `ReportComment`; field baru di `User`, `SharingSession`, `IncidentReport`; enum baru dan nilai enum tambahan. **Model baru belum memiliki API** (tanpa route/controller/service). |
+
+## Catatan Roadmap
+
+- **R-1.1 ✅ Migrasi skema tunggal (SosAlert, Facility, ReportLike, ReportComment, field baru, enum baru)** — folder migrasi `prisma/migrations/20261026053638_resq_extend_schema/`, hanya berisi penambahan (tanpa `DROP`). Perubahan:
+  - Enum baru: `ReportStatus`, `SosCategory`, `SosStatus`, `FacilityType`. Nilai baru: `GuideCategory.LEGAL`, `IncidentCategory.HARASSMENT`/`PUBLIC_FACILITY`, `NotificationType.SOS_ALERT`/`SHARE_ARRIVED`.
+  - `User.locationUpdatedAt`; `SharingSession.expiresAt`, `destinationName`, `destinationLatitude`, `destinationLongitude`; `IncidentReport.status` (default `SUBMITTED`), `statusNote`, `isAnonymous` (default `false`) beserta index `createdAt`, `category`, `status`, `[latitude, longitude]`.
+  - **Model baru dan field baru belum dipakai oleh API mana pun.** `SosAlert`, `Facility`, `ReportLike`, `ReportComment` baru disiapkan di database (API menyusul di tugas roadmap 1.3, 2.1, dan 3.1). Endpoint lama tidak berubah perilakunya.
 
 ## Endpoint yang tersedia (diverifikasi dari route + controller)
 
@@ -118,15 +126,10 @@ Seluruh router di atas terdaftar di `app.js` (9 feature router + health check), 
 - `utils/jwt.js` punya **fallback default secret** (`"change_me_access_secret"`) bila env kosong. Untuk produksi, set semua `JWT_*_SECRET`.
 - `utils/mailer.js` mengirim link reset ke `${APP_URL}/api/auth/reset-password?token=...`, sedangkan endpoint reset adalah **POST** (butuh body `resetToken` + `newPassword`). Link email diharapkan membuka halaman frontend, bukan endpoint API langsung — pastikan `APP_URL`/alur frontend konsisten.
 
-## Prioritas Berikutnya (kondisi backend saat ini)
+## Rencana Lanjutan
 
-Seluruh modul fitur inti dan infrastruktur error sudah selesai. Prioritas mengikuti kondisi nyata:
+Pengerjaan selanjutnya mengikuti `docs/RESQ_BACKEND_ROADMAP.md` (Fase 0-3 dan ID tugas di sana).
 
-1. **API Documentation (Swagger/OpenAPI)** — Phase 2 Item 3 yang tersisa; melengkapi `API_REFERENCE.md` dengan dokumentasi interaktif.
-2. **API Testing** — pasang framework test (mis. Jest/Vitest) + tulis test endpoint.
-3. **Postman Collection** — untuk eksplorasi & QA manual.
-4. **Frontend Integration**.
-5. **Bug Fixing** & **Regression Testing**.
-6. **Deployment Preparation**.
-
-> Perbarui daftar ini sesuai arahan terbaru pemilik proyek.
+- Istilah **"Phase"** di dokumen ini merujuk pekerjaan lama yang sudah selesai.
+- Istilah **"Fase"** di roadmap merujuk pekerjaan baru yang akan dikerjakan.
+- Setiap tugas roadmap yang selesai dicatat dengan menyebut ID tugasnya (contoh: "SOS (R-1.3) ✅").
