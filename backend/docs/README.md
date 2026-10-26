@@ -18,6 +18,7 @@ Folder `docs/` adalah sumber dokumentasi proyek. Tujuannya agar setiap developer
 | `PROGRESS.md` | Status pengerjaan per fitur: selesai / sebagian / belum |
 | `API_REFERENCE.md` | Daftar endpoint API yang sudah diimplementasikan |
 | `CONVENTIONS.md` | Aturan penulisan kode, pola, dan konvensi proyek |
+| `RESQ_BACKEND_ROADMAP.md` | Rencana pengerjaan lanjutan, spesifikasi endpoint baru, dan pembagian tugas |
 
 ## Aturan Emas
 

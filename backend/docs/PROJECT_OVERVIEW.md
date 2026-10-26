@@ -99,7 +99,11 @@ backend/
 | `Guide` | Panduan keselamatan berkategori | Dipakai penuh (baca publik, tulis admin) |
 | `Notification` | Notifikasi ke pengguna | Dipakai penuh (dibuat via event bisnis) |
 | `Friendship` | Relasi pertemanan (PENDING/ACCEPTED/REJECTED) | Dipakai penuh |
-| `SharingSession` | Sesi berbagi lokasi owner -> viewer | Dipakai penuh |
+| `SharingSession` | Sesi berbagi lokasi owner -> viewer (kolom baru `expiresAt` dan tujuan perjalanan sudah ada di skema, belum dipakai API) | Dipakai penuh |
+| `SosAlert` | Peringatan SOS (kategori, status, lokasi) milik user | Disiapkan, API belum ada |
+| `Facility` | Fasilitas publik (polisi, rumah sakit, halte, dll.) dengan koordinat | Disiapkan, API belum ada |
+| `ReportLike` | Like pada laporan insiden (unik per laporan + user) | Disiapkan, API belum ada |
+| `ReportComment` | Komentar pada laporan insiden | Disiapkan, API belum ada |
 
 ## Variabel Lingkungan (`.env`)
 
