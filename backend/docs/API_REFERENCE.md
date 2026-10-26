@@ -262,4 +262,4 @@ Aturan:
 ## Belum Tersedia (rencana)
 
 - **Swagger / OpenAPI interaktif** belum ada (tidak ada dependency maupun setup di `app.js`). Dokumentasi endpoint saat ini mengandalkan file ini. Lihat `PROGRESS.md` (Phase 2 — Item 3).
-- Semua model di `prisma/schema.prisma` kini sudah memiliki API.
+- Semua model lama sudah memiliki API; SosAlert, Facility, ReportLike, ReportComment sudah ada di skema dan akan mendapat API di tugas roadmap 1.3, 2.1, dan 3.1.
