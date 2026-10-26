@@ -6,8 +6,9 @@
 // with asyncHandler, so thrown ServiceErrors (and any unexpected error)
 // propagate to the global error handler.
 
-const { sendSuccess, sendError } = require("../utils/response");
+const { sendSuccess, sendPaginated, sendError } = require("../utils/response");
 const { asyncHandler } = require("../utils/async-handler");
+const { parsePagination, buildPaginationMeta } = require("../utils/pagination");
 const guideService = require("../services/guide.service");
 const {
   validateCreateGuide,
@@ -18,12 +19,15 @@ const {
  * GET /api/guides (public)
  */
 const list = asyncHandler(async (req, res) => {
-  const guides = await guideService.getGuides();
+  const pagination = parsePagination(req.query);
+  const { guides, total } = await guideService.getGuides(pagination);
+  const meta = buildPaginationMeta(pagination.page, pagination.limit, total);
 
-  return sendSuccess(res, {
+  return sendPaginated(res, {
     statusCode: 200,
     message: "Guides retrieved successfully.",
     data: guides,
+    meta,
   });
 });
 

@@ -27,20 +27,31 @@ const PUBLIC_USER_FIELDS = {
  * an empty array when nothing matches.
  * @param {string} userId - The authenticated user's id (excluded from results).
  * @param {string} keyword - The sanitized, non-empty search term.
- * @returns {Promise<object[]>}
+ * @param {object} [pagination={}] - Normalized pagination options { skip, take }.
+ * @returns {Promise<{ users: object[], total: number }>}
  */
-async function searchUsers(userId, keyword) {
-  return prisma.user.findMany({
-    where: {
-      id: { not: userId },
-      OR: [
-        { username: { contains: keyword, mode: "insensitive" } },
-        { fullName: { contains: keyword, mode: "insensitive" } },
-      ],
-    },
-    orderBy: { username: "asc" },
-    select: PUBLIC_USER_FIELDS,
-  });
+async function searchUsers(userId, keyword, pagination = {}) {
+  const { skip, take } = pagination;
+  const where = {
+    id: { not: userId },
+    OR: [
+      { username: { contains: keyword, mode: "insensitive" } },
+      { fullName: { contains: keyword, mode: "insensitive" } },
+    ],
+  };
+
+  const [users, total] = await Promise.all([
+    prisma.user.findMany({
+      where,
+      orderBy: { username: "asc" },
+      select: PUBLIC_USER_FIELDS,
+      ...(typeof skip === "number" ? { skip } : {}),
+      ...(typeof take === "number" ? { take } : {}),
+    }),
+    prisma.user.count({ where }),
+  ]);
+
+  return { users, total };
 }
 
 /**
@@ -109,9 +120,12 @@ async function getUserById(meId, targetId) {
  * Returns 404 if the user does not exist. Only ACCEPTED friendships are
  * considered; pending and rejected relationships are excluded.
  * @param {string} targetId
- * @returns {Promise<object[]>}
+ * @param {object} [pagination={}] - Normalized pagination options { skip, take }.
+ * @returns {Promise<{ friends: object[], total: number }>}
  */
-async function getUserFriends(targetId) {
+async function getUserFriends(targetId, pagination = {}) {
+  const { skip, take } = pagination;
+
   const user = await prisma.user.findUnique({
     where: { id: targetId },
     select: { id: true },
@@ -140,7 +154,13 @@ async function getUserFriends(targetId) {
   // Order alphabetically by username.
   friends.sort((a, b) => a.username.localeCompare(b.username));
 
-  return friends;
+  const total = friends.length;
+  const paginatedFriends =
+    typeof skip === "number" && typeof take === "number"
+      ? friends.slice(skip, skip + take)
+      : friends;
+
+  return { friends: paginatedFriends, total };
 }
 
 module.exports = {

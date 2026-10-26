@@ -5,8 +5,9 @@
 // asyncHandler, so thrown ServiceErrors (and any unexpected error) propagate
 // to the global error handler.
 
-const { sendSuccess, sendError } = require("../utils/response");
+const { sendSuccess, sendPaginated, sendError } = require("../utils/response");
 const { asyncHandler } = require("../utils/async-handler");
+const { parsePagination, buildPaginationMeta } = require("../utils/pagination");
 const reportMediaService = require("../services/report-media.service");
 const { validateUploadMedia } = require("../validations/report-media.validation");
 
@@ -42,15 +43,19 @@ const create = asyncHandler(async (req, res) => {
  * GET /api/reports/:reportId/media
  */
 const list = asyncHandler(async (req, res) => {
-  const media = await reportMediaService.getMedia(
+  const pagination = parsePagination(req.query);
+  const { media, total } = await reportMediaService.getMedia(
     req.user.id,
-    req.params.reportId
+    req.params.reportId,
+    pagination
   );
+  const meta = buildPaginationMeta(pagination.page, pagination.limit, total);
 
-  return sendSuccess(res, {
+  return sendPaginated(res, {
     statusCode: 200,
     message: "Media retrieved successfully.",
     data: media,
+    meta,
   });
 });
 

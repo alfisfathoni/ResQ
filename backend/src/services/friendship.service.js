@@ -137,17 +137,28 @@ async function notifyFriendRequest(friendship) {
  * Returns only ACCEPTED friendships where the user is either the requester or
  * the addressee, newest first.
  * @param {string} userId
- * @returns {Promise<object[]>}
+ * @param {object} [pagination={}] - Normalized pagination options { skip, take }.
+ * @returns {Promise<{ friends: object[], total: number }>}
  */
-async function getFriends(userId) {
-  return prisma.friendship.findMany({
-    where: {
-      status: "ACCEPTED",
-      OR: [{ requesterId: userId }, { addresseeId: userId }],
-    },
-    orderBy: { updatedAt: "desc" },
-    select: FRIENDSHIP_FIELDS,
-  });
+async function getFriends(userId, pagination = {}) {
+  const { skip, take } = pagination;
+  const where = {
+    status: "ACCEPTED",
+    OR: [{ requesterId: userId }, { addresseeId: userId }],
+  };
+
+  const [friends, total] = await Promise.all([
+    prisma.friendship.findMany({
+      where,
+      orderBy: { updatedAt: "desc" },
+      select: FRIENDSHIP_FIELDS,
+      ...(typeof skip === "number" ? { skip } : {}),
+      ...(typeof take === "number" ? { take } : {}),
+    }),
+    prisma.friendship.count({ where }),
+  ]);
+
+  return { friends, total };
 }
 
 /**
@@ -156,17 +167,28 @@ async function getFriends(userId) {
  * Only PENDING requests where the user is the addressee are returned, so a
  * user never sees requests meant for someone else.
  * @param {string} userId
- * @returns {Promise<object[]>}
+ * @param {object} [pagination={}] - Normalized pagination options { skip, take }.
+ * @returns {Promise<{ requests: object[], total: number }>}
  */
-async function getIncomingRequests(userId) {
-  return prisma.friendship.findMany({
-    where: {
-      status: "PENDING",
-      addresseeId: userId,
-    },
-    orderBy: { createdAt: "desc" },
-    select: FRIENDSHIP_FIELDS,
-  });
+async function getIncomingRequests(userId, pagination = {}) {
+  const { skip, take } = pagination;
+  const where = {
+    status: "PENDING",
+    addresseeId: userId,
+  };
+
+  const [requests, total] = await Promise.all([
+    prisma.friendship.findMany({
+      where,
+      orderBy: { createdAt: "desc" },
+      select: FRIENDSHIP_FIELDS,
+      ...(typeof skip === "number" ? { skip } : {}),
+      ...(typeof take === "number" ? { take } : {}),
+    }),
+    prisma.friendship.count({ where }),
+  ]);
+
+  return { requests, total };
 }
 
 /**

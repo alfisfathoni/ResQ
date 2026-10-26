@@ -6,8 +6,9 @@
 // thrown ServiceErrors (and any unexpected error) propagate to the global
 // error handler.
 
-const { sendSuccess, sendError } = require("../utils/response");
+const { sendSuccess, sendPaginated, sendError } = require("../utils/response");
 const { asyncHandler } = require("../utils/async-handler");
+const { parsePagination, buildPaginationMeta } = require("../utils/pagination");
 const sharingSessionService = require("../services/sharing-session.service");
 const {
   validateCreateSharingSession,
@@ -39,12 +40,18 @@ const create = asyncHandler(async (req, res) => {
  * GET /api/sharing-sessions/active
  */
 const listActive = asyncHandler(async (req, res) => {
-  const sessions = await sharingSessionService.getActiveSessions(req.user.id);
+  const pagination = parsePagination(req.query);
+  const { sessions, total } = await sharingSessionService.getActiveSessions(
+    req.user.id,
+    pagination
+  );
+  const meta = buildPaginationMeta(pagination.page, pagination.limit, total);
 
-  return sendSuccess(res, {
+  return sendPaginated(res, {
     statusCode: 200,
     message: "Active sharing sessions retrieved successfully.",
     data: sessions,
+    meta,
   });
 });
 

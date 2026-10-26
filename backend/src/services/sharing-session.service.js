@@ -130,17 +130,28 @@ async function startSession(ownerId) {
  *
  * Includes sessions the user owns and sessions where the user is the viewer.
  * @param {string} userId
- * @returns {Promise<object[]>}
+ * @param {object} [pagination={}] - Normalized pagination options { skip, take }.
+ * @returns {Promise<{ sessions: object[], total: number }>}
  */
-async function getActiveSessions(userId) {
-  return prisma.sharingSession.findMany({
-    where: {
-      isActive: true,
-      OR: [{ ownerId: userId }, { viewerId: userId }],
-    },
-    orderBy: { startedAt: "desc" },
-    select: SESSION_FIELDS,
-  });
+async function getActiveSessions(userId, pagination = {}) {
+  const { skip, take } = pagination;
+  const where = {
+    isActive: true,
+    OR: [{ ownerId: userId }, { viewerId: userId }],
+  };
+
+  const [sessions, total] = await Promise.all([
+    prisma.sharingSession.findMany({
+      where,
+      orderBy: { startedAt: "desc" },
+      select: SESSION_FIELDS,
+      ...(typeof skip === "number" ? { skip } : {}),
+      ...(typeof take === "number" ? { take } : {}),
+    }),
+    prisma.sharingSession.count({ where }),
+  ]);
+
+  return { sessions, total };
 }
 
 /**

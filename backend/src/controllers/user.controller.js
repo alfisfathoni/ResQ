@@ -6,8 +6,9 @@
 // thrown ServiceErrors (and any unexpected error) propagate to the global
 // error handler.
 
-const { sendSuccess, sendError } = require("../utils/response");
+const { sendSuccess, sendPaginated, sendError } = require("../utils/response");
 const { asyncHandler } = require("../utils/async-handler");
+const { parsePagination, buildPaginationMeta } = require("../utils/pagination");
 const userService = require("../services/user.service");
 const { validateUserSearch } = require("../validations/user.validation");
 
@@ -24,12 +25,19 @@ const search = asyncHandler(async (req, res) => {
     });
   }
 
-  const users = await userService.searchUsers(req.user.id, data.q);
+  const pagination = parsePagination(req.query);
+  const { users, total } = await userService.searchUsers(
+    req.user.id,
+    data.q,
+    pagination
+  );
+  const meta = buildPaginationMeta(pagination.page, pagination.limit, total);
 
-  return sendSuccess(res, {
+  return sendPaginated(res, {
     statusCode: 200,
     message: "Users retrieved successfully.",
     data: users,
+    meta,
   });
 });
 
@@ -50,12 +58,18 @@ const detail = asyncHandler(async (req, res) => {
  * GET /api/users/:id/friends
  */
 const friends = asyncHandler(async (req, res) => {
-  const list = await userService.getUserFriends(req.params.id);
+  const pagination = parsePagination(req.query);
+  const { friends: friendList, total } = await userService.getUserFriends(
+    req.params.id,
+    pagination
+  );
+  const meta = buildPaginationMeta(pagination.page, pagination.limit, total);
 
-  return sendSuccess(res, {
+  return sendPaginated(res, {
     statusCode: 200,
     message: "User friends retrieved successfully.",
-    data: list,
+    data: friendList,
+    meta,
   });
 });
 
