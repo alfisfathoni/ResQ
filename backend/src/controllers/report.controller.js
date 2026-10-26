@@ -5,8 +5,9 @@
 // thrown ServiceErrors (and any unexpected error) propagate to the global
 // error handler.
 
-const { sendSuccess, sendError } = require("../utils/response");
+const { sendSuccess, sendPaginated, sendError } = require("../utils/response");
 const { asyncHandler } = require("../utils/async-handler");
+const { parsePagination, buildPaginationMeta } = require("../utils/pagination");
 const reportService = require("../services/report.service");
 const {
   validateCreateReport,
@@ -39,12 +40,15 @@ const create = asyncHandler(async (req, res) => {
  * GET /api/reports
  */
 const list = asyncHandler(async (req, res) => {
-  const reports = await reportService.getReports(req.user.id);
+  const pagination = parsePagination(req.query);
+  const { reports, total } = await reportService.getReports(req.user.id, pagination);
+  const meta = buildPaginationMeta(pagination.page, pagination.limit, total);
 
-  return sendSuccess(res, {
+  return sendPaginated(res, {
     statusCode: 200,
     message: "Incident reports retrieved successfully.",
     data: reports,
+    meta,
   });
 });
 

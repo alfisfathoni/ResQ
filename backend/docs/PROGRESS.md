@@ -1,6 +1,6 @@
 # ResQ Backend — Status Pengerjaan
 
-> **Terakhir diperbarui:** 2026-10-25 (audit ulang menyeluruh setelah Phase 1 + Phase 2 item 1-2)
+> **Terakhir diperbarui:** 2026-10-26 (Turn 2 / T2 — Security Middlewares & Standardized Pagination)
 > **Sumber kebenaran:** HANYA kode — seluruh `src/` (app.js, routes, controllers, services, validations, middleware, utils, config), `prisma/schema.prisma`, dan seluruh migrasi Prisma. Dokumentasi lama TIDAK dijadikan acuan.
 > **Metode:** Setiap file di `src/` dibaca baris per baris. Jika dokumen lama bertentangan dengan kode, kode yang menang dan dokumen diperbarui mengikuti kode.
 > **Aturan:** Setiap kali menyelesaikan atau mengubah fitur, perbarui tabel di bawah ini. Status yang jujur lebih berguna daripada status yang optimis.
@@ -10,7 +10,15 @@
 Backend ResQ kini memiliki **sembilan modul fitur yang berfungsi penuh** end-to-end (route → controller → service → validasi → Prisma):
 **Authentication (termasuk User Profile)**, **Emergency Contact**, **Incident Report**, **Report Media**, **Guide**, **Friendship**, **Notification**, **Sharing Session**, dan **User Utility**. Semua model di `prisma/schema.prisma` sudah memiliki API.
 
-Infrastruktur lintas-sistem juga sudah matang:
+Infrastruktur lintas-sistem & keamanan:
+- **Security Middlewares (Turn 2)**:
+  - **Helmet**: proteksi HTTP security headers global di `app.js`.
+  - **Morgan**: HTTP request logging (`dev` format).
+  - **Rate Limiting**: `express-rate-limit` pada endpoint autentikasi publik (maks 20 req / 15 mnt) untuk mencegah brute-force attacks.
+- **Standardized Pagination (Turn 2)**:
+  - Utility `utils/pagination.js` (`parsePagination`, `buildPaginationMeta`) menormalisasi `page` & `limit` (default: 1 & 10, batas maksimal: 50).
+  - Response helper `sendPaginated` di `utils/response.js` mengembalikan struktur `{ status: "success", data: [...], meta: { page, limit, total, totalPages } }`.
+  - Terintegrasi di seluruh listing endpoint (reports, guides, notifications, friendships, users search/friends, sharing sessions, emergency contacts, report media).
 - **Global error handler** (`middleware/error.middleware.js`) terpasang paling akhir di `app.js`.
 - **Shared ServiceError** (`utils/service-error.js`) menggantikan duplikasi per-service.
 - **asyncHandler** (`utils/async-handler.js`) membungkus seluruh controller CRUD (auth controller tetap `try/catch` lokal).
@@ -36,23 +44,27 @@ Legenda status:
 | Phase 1 — Item 6 | User Utility Module | ✅ |
 | Phase 2 — Item 1 | Notification Business Integration | ✅ |
 | Phase 2 — Item 2 | Global Error Handling | ✅ |
+| Turn 2 (T2) — 0.2 | Core Security & Logging (Helmet, Morgan, Rate Limit) | ✅ |
+| Turn 2 (T2) — 0.3 | Standardized Pagination & Metadata Response | ✅ |
 | Phase 2 — Item 3 | API Documentation (Swagger/OpenAPI) | ⬜ |
 
 ## Status Per Fitur
 
 | Fitur | Status | Catatan (berdasarkan kode) |
 | --- | --- | --- |
-| **Authentication** | ✅ | register, login (email/username), refresh, logout, verify-email, forgot/reset-password. Controller auth masih `try/catch` lokal. |
+| **Authentication** | ✅ | register, login (email/username), refresh, logout, verify-email, forgot/reset-password. Diproteksi rate limiter (maks 20 req/15 min). Controller auth masih `try/catch` lokal. |
 | **User Profile** | ✅ | Bagian modul auth: `GET/PUT/DELETE /api/auth/profile`. Update terbatas `fullName`, `phoneNumber`, `profilePicture`. DELETE menolak ADMIN (403). |
-| **Emergency Contact** | ✅ | CRUD penuh. Maks 5/user, `priority` unik 1-5, `phoneNumber` unik per user. |
-| **Incident Report** | ✅ | CRUD penuh. `category` enum, koordinat divalidasi & di-serialize ke `Number`. |
-| **Report Media** | ✅ | Upload (Multer→Cloudinary), list, delete. Hapus asset best-effort lalu hapus baris DB. |
-| **Guide** | ✅ | `GET /` & `GET /:id` publik; `POST`/`PUT`/`DELETE` admin (`authenticate` + `isAdmin`). Kategori enum `GuideCategory`. |
-| **Friendship** | ✅ | request, list friends, list incoming requests, accept, reject, remove. Cek dua arah; revive `REJECTED`→`PENDING`. |
-| **Notification** | ✅ | list, unread-count, read, read-all, delete. Dibuat via event bisnis (bukan endpoint create langsung). |
-| **Sharing Session** | ✅ | start (ke semua teman ACCEPTED), list active, detail, stop. Satu sesi aktif per owner. |
-| **User Utility** | ✅ | search (by username/fullName), detail (+`friendshipStatus`), list friends. Hanya field publik. |
+| **Emergency Contact** | ✅ | CRUD penuh. Maks 5/user, `priority` unik 1-5, `phoneNumber` unik per user. Listing mendukung paginasi & meta. |
+| **Incident Report** | ✅ | CRUD penuh. `category` enum, koordinat divalidasi & di-serialize ke `Number`. Listing mendukung paginasi & meta. |
+| **Report Media** | ✅ | Upload (Multer→Cloudinary), list, delete. Hapus asset best-effort lalu hapus baris DB. Listing mendukung paginasi & meta. |
+| **Guide** | ✅ | `GET /` & `GET /:id` publik; `POST`/`PUT`/`DELETE` admin (`authenticate` + `isAdmin`). Kategori enum `GuideCategory`. Listing mendukung paginasi & meta. |
+| **Friendship** | ✅ | request, list friends, list incoming requests, accept, reject, remove. Cek dua arah; revive `REJECTED`→`PENDING`. Listing mendukung paginasi & meta. |
+| **Notification** | ✅ | list, unread-count, read, read-all, delete. Dibuat via event bisnis (bukan endpoint create langsung). Listing mendukung paginasi & meta. |
+| **Sharing Session** | ✅ | start (ke semua teman ACCEPTED), list active, detail, stop. Satu sesi aktif per owner. Listing aktif mendukung paginasi & meta. |
+| **User Utility** | ✅ | search (by username/fullName), detail (+`friendshipStatus`), list friends. Hanya field publik. Search & friends list mendukung paginasi & meta. |
 | **Notification Integration** | ✅ | friendship (FRIEND_REQUEST, FRIEND_ACCEPTED) & sharing session (SHARE_SESSION) membuat notifikasi best-effort via `notification.service`. |
+| **Security & Logging** | ✅ | Helmet secure headers, Morgan HTTP request logging, express-rate-limit pada auth endpoints. |
+| **Standardized Pagination** | ✅ | Helper `utils/pagination.js` (`parsePagination`, `buildPaginationMeta`) + `sendPaginated` di `utils/response.js`. Capped limit 50. |
 | **Global Error Handler** | ✅ | `middleware/error.middleware.js` terdaftar terakhir di `app.js`; map `ServiceError` + 500 generik tanpa bocor stack. |
 | **Shared ServiceError** | ✅ | `utils/service-error.js`; tiap service import & re-export. Tidak ada lagi duplikasi kelas. |
 | **asyncHandler** | ✅ | `utils/async-handler.js`; dipakai semua controller CRUD. Auth controller pengecualian (try/catch lokal). |
@@ -71,15 +83,15 @@ Legenda status:
 ## Endpoint yang tersedia (diverifikasi dari route + controller)
 
 - **Health**: `GET /`.
-- **Auth** `/api/auth`: `POST /register`, `POST /login`, `POST /refresh`, `POST /forgot-password`, `POST /reset-password`, `GET /verify-email`, `GET /profile`*, `PUT /profile`*, `DELETE /profile`*, `POST /logout`*.
-- **Emergency Contact** `/api/emergency-contacts`* : `POST /`, `GET /`, `PUT /:id`, `DELETE /:id`.
-- **Incident Report** `/api/reports`* : `POST /`, `GET /`, `GET /:id`, `PUT /:id`, `DELETE /:id`.
-- **Report Media** `/api/reports/:reportId/media`* : `POST /`, `GET /`, `DELETE /:mediaId`.
-- **Guide** `/api/guides`: `GET /` (publik), `GET /:id` (publik), `POST /` (admin), `PUT /:id` (admin), `DELETE /:id` (admin).
-- **Friendship** `/api/friendships`* : `POST /request`, `GET /`, `GET /requests`, `PATCH /:id/accept`, `PATCH /:id/reject`, `DELETE /:id`.
-- **Notification** `/api/notifications`* : `GET /`, `GET /unread-count`, `PATCH /read-all`, `PATCH /:id/read`, `DELETE /:id`.
-- **Sharing Session** `/api/sharing-sessions`* : `POST /`, `GET /active`, `GET /:id`, `PATCH /:id/stop`.
-- **User Utility** `/api/users`* : `GET /search`, `GET /:id`, `GET /:id/friends`.
+- **Auth** `/api/auth`: `POST /register`, `POST /login`, `POST /refresh`, `POST /forgot-password`, `POST /reset-password`, `GET /verify-email`, `GET /profile`*, `PUT /profile`*, `DELETE /profile`*, `POST /logout`*. (Endpoint publik dilindungi rate limiter).
+- **Emergency Contact** `/api/emergency-contacts`* : `POST /`, `GET /` (paginasi), `PUT /:id`, `DELETE /:id`.
+- **Incident Report** `/api/reports`* : `POST /`, `GET /` (paginasi), `GET /:id`, `PUT /:id`, `DELETE /:id`.
+- **Report Media** `/api/reports/:reportId/media`* : `POST /`, `GET /` (paginasi), `DELETE /:mediaId`.
+- **Guide** `/api/guides`: `GET /` (publik, paginasi), `GET /:id` (publik), `POST /` (admin), `PUT /:id` (admin), `DELETE /:id` (admin).
+- **Friendship** `/api/friendships`* : `POST /request`, `GET /` (paginasi), `GET /requests` (paginasi), `PATCH /:id/accept`, `PATCH /:id/reject`, `DELETE /:id`.
+- **Notification** `/api/notifications`* : `GET /` (paginasi), `GET /unread-count`, `PATCH /read-all`, `PATCH /:id/read`, `DELETE /:id`.
+- **Sharing Session** `/api/sharing-sessions`* : `POST /`, `GET /active` (paginasi), `GET /:id`, `PATCH /:id/stop`.
+- **User Utility** `/api/users`* : `GET /search` (paginasi), `GET /:id`, `GET /:id/friends` (paginasi).
 
 (* = butuh `Authorization: Bearer <accessToken>`)
 
@@ -92,35 +104,30 @@ Seluruh router di atas terdaftar di `app.js` (9 feature router + health check), 
 - Service melempar `ServiceError` **bersama** (`utils/service-error.js`); diteruskan ke global error handler.
 - Controller CRUD dibungkus `asyncHandler`; hanya validasi gagal yang dikembalikan langsung (**422**). Auth controller tetap `try/catch` lokal.
 - Validator buatan sendiri (tanpa library) mengembalikan `{ valid, errors, data }`.
+- Listing controller menggunakan `parsePagination(req.query)` dan `buildPaginationMeta(...)` dari `utils/pagination.js`, lalu merespons dengan `sendPaginated` dari `utils/response.js`.
 
-### Notification business integration (Phase 2 — Item 1)
-- `notification.service` menyediakan `createNotification` (satu) & `createNotifications` (bulk), keduanya **best-effort** (gagal → log + swallow, tidak membatalkan operasi utama).
-- Friendship: kirim request → `FRIEND_REQUEST`; accept → `FRIEND_ACCEPTED`.
-- Sharing session: start → `SHARE_SESSION` ke setiap teman ACCEPTED.
+### Keamanan & Logging (Turn 2)
+- **Helmet**: mengamankan header HTTP standar di root `app.js`.
+- **Morgan**: mencatat request HTTP masuk (`dev` format).
+- **Rate limiting**: `express-rate-limit` dipasang di `auth.routes.js` pada register, login, refresh, dan password requests (maks 20 request / 15 menit). Melebihi kuota menghasilkan status **429** (`sendError`).
 
-### Global error handling (Phase 2 — Item 2)
-- `errorHandler` empat-argumen, terdaftar terakhir di `app.js`. `headersSent` → delegasi ke Express default.
-- `ServiceError` → status/message/errors asli; error lain → **500** `"Something went wrong."` + `console.error`.
-
-### Catatan modul baru
-- **Friendship**: relasi diperiksa di kedua arah; baris `REJECTED` di arah sama "dihidupkan" ke `PENDING`; accept/reject hanya oleh addressee; unfriend hanya untuk `ACCEPTED`.
-- **Sharing Session**: satu sesi = banyak baris dengan `startedAt` sama (satu per viewer). Satu sesi aktif per owner; stop menonaktifkan seluruh grup.
-- **User Utility**: hanya field publik (`id, fullName, username, profilePicture, createdAt`); `friendshipStatus` ∈ `FRIENDS|PENDING_SENT|PENDING_RECEIVED|NONE` (REJECTED disembunyikan).
-- **Guide**: konten global admin-managed; baca publik, tulis via `isAdmin`.
-- **Route ordering**: path literal (`/search`, `/active`, `/unread-count`, `/read-all`) dideklarasikan sebelum `/:id`.
-
-## Yang Belum (benar-benar belum ada di kode)
-
-1. **Swagger / OpenAPI** (Phase 2 — Item 3) — belum ada dependency maupun setup. Dokumentasi endpoint saat ini di `docs/API_REFERENCE.md`.
-2. **Automated testing** — belum ada framework/test/skrip test.
-
-### Catatan keamanan (temuan dari kode, masih berlaku)
-- `utils/jwt.js` punya **fallback default secret** (`"change_me_access_secret"`) bila env kosong. Untuk produksi, set semua `JWT_*_SECRET`.
-- `utils/mailer.js` mengirim link reset ke `${APP_URL}/api/auth/reset-password?token=...`, sedangkan endpoint reset adalah **POST** (butuh body `resetToken` + `newPassword`). Link email diharapkan membuka halaman frontend, bukan endpoint API langsung — pastikan `APP_URL`/alur frontend konsisten.
+### Paginasi & Metadata Response (Turn 2)
+- Format respons paginasi:
+  ```json
+  {
+    "status": "success",
+    "data": [...],
+    "meta": {
+      "page": 1,
+      "limit": 10,
+      "total": 42,
+      "totalPages": 5
+    }
+  }
+  ```
+- Nilai default: `page = 1`, `limit = 10`. Batas maksimal `limit` = **50**.
 
 ## Prioritas Berikutnya (kondisi backend saat ini)
-
-Seluruh modul fitur inti dan infrastruktur error sudah selesai. Prioritas mengikuti kondisi nyata:
 
 1. **API Documentation (Swagger/OpenAPI)** — Phase 2 Item 3 yang tersisa; melengkapi `API_REFERENCE.md` dengan dokumentasi interaktif.
 2. **API Testing** — pasang framework test (mis. Jest/Vitest) + tulis test endpoint.

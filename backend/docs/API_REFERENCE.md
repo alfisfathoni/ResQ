@@ -11,17 +11,46 @@ Authorization: Bearer <accessToken>
 
 Semua respons melewati helper `utils/response.js`.
 
-Sukses (`sendSuccess`):
+### Sukses standar (`sendSuccess`):
 ```json
-{ "success": true, "message": "...", "data": <payload-atau-null> }
+{
+  "status": "success",
+  "success": true,
+  "message": "...",
+  "data": <payload-atau-null>
+}
 ```
 
-Gagal (`sendError`):
+### Listing dengan paginasi standar (`sendPaginated`):
 ```json
-{ "success": false, "message": "...", "errors": <detail-atau-null> }
+{
+  "status": "success",
+  "success": true,
+  "message": "...",
+  "data": [...],
+  "meta": {
+    "page": 1,
+    "limit": 10,
+    "total": 42,
+    "totalPages": 5
+  }
+}
+```
+
+### Gagal (`sendError`):
+```json
+{
+  "success": false,
+  "message": "...",
+  "errors": <detail-atau-null>
+}
 ```
 
 - Field `data` **selalu ada** pada respons sukses (bernilai `null` jika tidak ada payload).
+- Seluruh listing endpoint mendukung query parameters `page` (default: 1) dan `limit` (default: 10, batas maksimal: 50).
+- Endpoint autentikasi sensitif (register, login, refresh, password requests) dilindungi oleh rate limiting (`express-rate-limit`, maks 20 request / 15 menit); melebihi kuota menghasilkan status **429**.
+- Header HTTP diamankan secara terpusat menggunakan middleware `helmet`.
+- Log request HTTP dicatat menggunakan `morgan` (`dev` format pada development).
 - Field `errors` berisi map `{ namaField: pesan }` saat validasi gagal; `null` untuk error umum.
 - Error validasi menggunakan status **422** dengan `message: "Validation failed."`.
 - Error tak terduga menggunakan status **500** dengan `message: "Something went wrong."`.
@@ -45,10 +74,12 @@ Sejak Phase 2, penanganan error dipusatkan:
 
 ## Autentikasi — `/api/auth`
 
+Rate limit: Maksimal 20 requests per 15 menit per IP (status 429).
+
 ### POST `/register` — publik
 Membuat akun baru (role default `USER`, `isVerified=false`) lalu mengirim email verifikasi.
 Payload & aturan validasi:
-- `fullName` — wajib, maks 255 karакter.
+- `fullName` — wajib, maks 255 karakter.
 - `username` — wajib, 3-100 karakter, hanya huruf/angka/underscore/titik.
 - `email` — wajib, format email valid, maks 255, disimpan lowercase.
 - `phoneNumber` — wajib, pola `^\+?\d{7,15}$` (opsional `+`, 7-15 digit).
@@ -102,7 +133,7 @@ Update parsial, minimal satu field:
 | Method | Path | Status sukses | Keterangan |
 | --- | --- | --- | --- |
 | POST | `/` | 201 | Tambah kontak |
-| GET | `/` | 200 | Daftar kontak user, diurut `priority` naik |
+| GET | `/` | 200 | Daftar kontak user (paginasi: `page`, `limit`), diurut `priority` naik |
 | PUT | `/:id` | 200 | Update parsial |
 | DELETE | `/:id` | 200 | Hapus kontak |
 
@@ -121,7 +152,7 @@ Aturan bisnis & validasi:
 | Method | Path | Status sukses | Keterangan |
 | --- | --- | --- | --- |
 | POST | `/` | 201 | Buat laporan |
-| GET | `/` | 200 | Daftar laporan user, diurut `createdAt` terbaru dulu |
+| GET | `/` | 200 | Daftar laporan user (paginasi: `page`, `limit`), diurut `createdAt` terbaru dulu |
 | GET | `/:id` | 200 | Detail satu laporan |
 | PUT | `/:id` | 200 | Update parsial |
 | DELETE | `/:id` | 200 | Hapus laporan (media ikut terhapus via cascade) |
@@ -145,7 +176,7 @@ Upload via `multipart/form-data`, field bernama `file`.
 | Method | Path | Status sukses | Keterangan |
 | --- | --- | --- | --- |
 | POST | `/` | 201 | Upload 1 media ke Cloudinary |
-| GET | `/` | 200 | Daftar media laporan, diurut `createdAt` terlama dulu |
+| GET | `/` | 200 | Daftar media laporan (paginasi: `page`, `limit`), diurut `createdAt` terlama dulu |
 | DELETE | `/:mediaId` | 200 | Hapus 1 media |
 
 Aturan:
@@ -163,7 +194,7 @@ Konten panduan keselamatan yang dikelola admin. **Baca bersifat publik; tulis ha
 
 | Method | Path | Auth | Status sukses | Keterangan |
 | --- | --- | --- | --- | --- |
-| GET | `/` | — (publik) | 200 | Daftar semua panduan, diurut `createdAt` terbaru dulu |
+| GET | `/` | — (publik) | 200 | Daftar semua panduan (paginasi: `page`, `limit`), diurut `createdAt` terbaru dulu |
 | GET | `/:id` | — (publik) | 200 | Detail satu panduan |
 | POST | `/` | admin | 201 | Buat panduan |
 | PUT | `/:id` | admin | 200 | Update parsial |
@@ -184,8 +215,8 @@ Payload & validasi (create):
 | Method | Path | Status sukses | Keterangan |
 | --- | --- | --- | --- |
 | POST | `/request` | 201 | Kirim permintaan pertemanan (`body.addresseeId` wajib) |
-| GET | `/` | 200 | Daftar teman (status `ACCEPTED`), diurut `updatedAt` terbaru dulu |
-| GET | `/requests` | 200 | Daftar permintaan masuk (`PENDING`, ditujukan ke user), terbaru dulu |
+| GET | `/` | 200 | Daftar teman (status `ACCEPTED`, paginasi: `page`, `limit`), diurut `updatedAt` terbaru dulu |
+| GET | `/requests` | 200 | Daftar permintaan masuk (`PENDING`, paginasi: `page`, `limit`), terbaru dulu |
 | PATCH | `/:id/accept` | 200 | Terima permintaan (hanya addressee) |
 | PATCH | `/:id/reject` | 200 | Tolak permintaan (hanya addressee) |
 | DELETE | `/:id` | 200 | Hapus (unfriend) pertemanan `ACCEPTED` yang melibatkan user |
@@ -207,7 +238,7 @@ Aturan bisnis & validasi:
 
 | Method | Path | Status sukses | Keterangan |
 | --- | --- | --- | --- |
-| GET | `/` | 200 | Daftar notifikasi user, terbaru dulu (termasuk preview `sender`) |
+| GET | `/` | 200 | Daftar notifikasi user (paginasi: `page`, `limit`), terbaru dulu (termasuk preview `sender`) |
 | GET | `/unread-count` | 200 | `data = { count }` jumlah belum dibaca |
 | PATCH | `/read-all` | 200 | Tandai semua sebagai dibaca; `data = { updated }` |
 | PATCH | `/:id/read` | 200 | Tandai satu sebagai dibaca (idempoten jika sudah dibaca) |
@@ -227,7 +258,7 @@ Model data: satu baris `SharingSession` per pasangan (owner, viewer). Satu "sesi
 | Method | Path | Status sukses | Keterangan |
 | --- | --- | --- | --- |
 | POST | `/` | 201 | Mulai sesi: berbagi lokasi ke semua teman `ACCEPTED`; `data` = array baris sesi aktif |
-| GET | `/active` | 200 | Daftar sesi aktif di mana user adalah owner atau viewer |
+| GET | `/active` | 200 | Daftar sesi aktif (paginasi: `page`, `limit`) di mana user adalah owner atau viewer |
 | GET | `/:id` | 200 | Detail satu baris sesi (hanya owner atau viewer-nya) |
 | PATCH | `/:id/stop` | 200 | Hentikan sesi (hanya owner); menonaktifkan seluruh grup sesi |
 
@@ -247,9 +278,9 @@ Hanya mengembalikan field publik (`id, fullName, username, profilePicture, creat
 
 | Method | Path | Status sukses | Keterangan |
 | --- | --- | --- | --- |
-| GET | `/search?q=<kata>` | 200 | Cari user by `username`/`fullName` (case-insensitive), kecuali diri sendiri; diurut `username` |
+| GET | `/search?q=<kata>` | 200 | Cari user by `username`/`fullName` (case-insensitive, paginasi: `page`, `limit`), kecuali diri sendiri; diurut `username` |
 | GET | `/:id` | 200 | Profil publik + `friendshipStatus` relatif terhadap user |
-| GET | `/:id/friends` | 200 | Daftar teman `ACCEPTED` user tsb, diurut `username` |
+| GET | `/:id/friends` | 200 | Daftar teman `ACCEPTED` user tsb (paginasi: `page`, `limit`), diurut `username` |
 
 Aturan:
 - `q` — wajib & non-kosong → jika tidak **422**.

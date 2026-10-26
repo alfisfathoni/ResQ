@@ -74,16 +74,26 @@ async function createMedia({ userId, reportId, buffer, mediaType, resourceType }
  * List media for one of the authenticated user's reports, oldest first.
  * @param {string} userId
  * @param {string} reportId
- * @returns {Promise<object[]>}
+ * @param {object} [pagination={}] - Normalized pagination options { skip, take }.
+ * @returns {Promise<{ media: object[], total: number }>}
  */
-async function getMedia(userId, reportId) {
+async function getMedia(userId, reportId, pagination = {}) {
   await assertReportOwnership(userId, reportId);
+  const { skip, take } = pagination;
+  const where = { reportId };
 
-  return prisma.reportMedia.findMany({
-    where: { reportId },
-    orderBy: { createdAt: "asc" },
-    select: MEDIA_FIELDS,
-  });
+  const [media, total] = await Promise.all([
+    prisma.reportMedia.findMany({
+      where,
+      orderBy: { createdAt: "asc" },
+      select: MEDIA_FIELDS,
+      ...(typeof skip === "number" ? { skip } : {}),
+      ...(typeof take === "number" ? { take } : {}),
+    }),
+    prisma.reportMedia.count({ where }),
+  ]);
+
+  return { media, total };
 }
 
 /**

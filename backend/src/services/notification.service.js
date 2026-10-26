@@ -95,14 +95,25 @@ async function createNotifications(items = []) {
 /**
  * List the authenticated user's notifications, newest first.
  * @param {string} userId
- * @returns {Promise<object[]>}
+ * @param {object} [pagination={}] - Normalized pagination options { skip, take }.
+ * @returns {Promise<{ notifications: object[], total: number }>}
  */
-async function getNotifications(userId) {
-  return prisma.notification.findMany({
-    where: { userId },
-    orderBy: { createdAt: "desc" },
-    select: NOTIFICATION_FIELDS,
-  });
+async function getNotifications(userId, pagination = {}) {
+  const { skip, take } = pagination;
+  const where = { userId };
+
+  const [notifications, total] = await Promise.all([
+    prisma.notification.findMany({
+      where,
+      orderBy: { createdAt: "desc" },
+      select: NOTIFICATION_FIELDS,
+      ...(typeof skip === "number" ? { skip } : {}),
+      ...(typeof take === "number" ? { take } : {}),
+    }),
+    prisma.notification.count({ where }),
+  ]);
+
+  return { notifications, total };
 }
 
 /**
