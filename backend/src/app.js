@@ -12,6 +12,7 @@ const friendshipRoutes = require("./routes/friendship.routes");
 const notificationRoutes = require("./routes/notification.routes");
 const sharingSessionRoutes = require("./routes/sharing-session.routes");
 const userRoutes = require("./routes/user.routes");
+const pageRoutes = require("./routes/page.routes");
 const { errorHandler } = require("./middleware/error.middleware");
 
 // Create the Express application instance
@@ -54,6 +55,9 @@ app.use("/api/friendships", friendshipRoutes);
 app.use("/api/notifications", notificationRoutes);
 app.use("/api/sharing-sessions", sharingSessionRoutes);
 app.use("/api/users", userRoutes);
+
+// Browser pages opened from email links (e.g. GET /reset-password)
+app.use("/", pageRoutes);
 
 // --- Global error handler (must be registered last, after all routes) ---
 app.use(errorHandler);

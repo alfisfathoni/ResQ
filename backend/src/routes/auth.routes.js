@@ -6,7 +6,7 @@
 const express = require("express");
 const authController = require("../controllers/auth.controller");
 const { authenticate } = require("../middleware/auth.middleware");
-const { authLimiter } = require("../middleware/rate-limit.middleware");
+const { authLimiter, emailLimiter } = require("../middleware/rate-limit.middleware");
 
 const router = express.Router();
 
@@ -16,6 +16,7 @@ router.post("/login", authLimiter, authController.login);
 router.post("/refresh", authLimiter, authController.refreshToken);
 router.post("/forgot-password", authLimiter, authController.forgotPassword);
 router.post("/reset-password", authLimiter, authController.resetPassword);
+router.post("/resend-verification", emailLimiter, authController.resendVerification);
 router.get("/verify-email", authController.verifyEmail);
 
 // Protected endpoints

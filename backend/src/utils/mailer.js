@@ -83,7 +83,8 @@ async function sendVerificationEmail({ to, fullName, token }) {
  */
 async function sendPasswordResetEmail({ to, fullName, token }) {
   const baseUrl = process.env.APP_URL || "http://localhost:3000";
-  const resetUrl = `${baseUrl}/api/auth/reset-password?token=${encodeURIComponent(token)}`;
+  // Points at the browser form served by GET /reset-password (page.routes.js).
+  const resetUrl = `${baseUrl}/reset-password?token=${encodeURIComponent(token)}`;
 
   const subject = "Reset your ResQ password";
   const text =

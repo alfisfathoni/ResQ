@@ -69,6 +69,10 @@ function toPublicUser(user) {
  * self-contained JWT carrying the new user's id (see utils/jwt.js). The
  * account is "inactive" by way of isVerified = false.
  *
+ * Demo flag: when AUTO_VERIFY_EMAIL=true the account is created already
+ * verified and no verification email is sent (safety net when SMTP is down
+ * during a demo). Never enable it outside local development or a demo.
+ *
  * @param {object} payload - Sanitized { fullName, username, email, phoneNumber, password }.
  * @returns {Promise<object>} The created user, without the password hash.
  */
@@ -97,7 +101,10 @@ async function register(payload) {
   // Hash the password before persisting.
   const passwordHash = await hashPassword(password);
 
-  // Persist the user: default role USER, inactive until email is verified.
+  const autoVerify = process.env.AUTO_VERIFY_EMAIL === "true";
+
+  // Persist the user: default role USER, inactive until email is verified
+  // (unless the AUTO_VERIFY_EMAIL demo flag is on).
   const user = await prisma.user.create({
     data: {
       fullName,
@@ -106,7 +113,7 @@ async function register(payload) {
       phoneNumber,
       password: passwordHash,
       role: "USER",
-      isVerified: false,
+      isVerified: autoVerify,
     },
     select: {
       id: true,
@@ -120,11 +127,29 @@ async function register(payload) {
     },
   });
 
-  // Generate the stateless email-verification token and send the email.
+  // Already verified by the demo flag: nothing to email.
+  if (user.isVerified) {
+    return user;
+  }
+
+  // If email delivery fails, keep the created account; the user can request a
+  // resend later via POST /api/auth/resend-verification.
+  await dispatchVerificationEmail(user);
+
+  return user;
+}
+
+/**
+ * Sign a fresh email-verification token for a user and email the link.
+ *
+ * Mail failures are logged and swallowed so callers never fail (or reveal
+ * anything) because SMTP is unavailable.
+ * @param {{ id: string, email: string, fullName: string }} user
+ * @returns {Promise<void>}
+ */
+async function dispatchVerificationEmail(user) {
   const verificationToken = signEmailVerificationToken({ sub: user.id });
 
-  // If email delivery fails, surface it but keep the created account; the user
-  // can request a resend later. We log and rethrow as a non-fatal warning path.
   try {
     await sendVerificationEmail({
       to: user.email,
@@ -132,11 +157,32 @@ async function register(payload) {
       token: verificationToken,
     });
   } catch (mailError) {
-    // Don't fail registration if SMTP is unavailable; log for diagnostics.
     console.error("Failed to send verification email:", mailError.message);
   }
+}
 
-  return user;
+/**
+ * Resend the verification email for an unverified account.
+ *
+ * Sends a new link only when a user with the email exists and is not yet
+ * verified. Otherwise does nothing. Like forgotPassword(), it never signals
+ * which case occurred so the controller can return an identical response and
+ * avoid account enumeration.
+ *
+ * @param {object} payload - { email } (already lowercased/trimmed).
+ * @returns {Promise<void>}
+ */
+async function resendVerification({ email }) {
+  const user = await prisma.user.findUnique({
+    where: { email },
+    select: { id: true, fullName: true, email: true, isVerified: true },
+  });
+
+  if (!user || user.isVerified) {
+    return;
+  }
+
+  await dispatchVerificationEmail(user);
 }
 
 /**
@@ -552,6 +598,7 @@ module.exports = {
   login,
   refreshToken,
   forgotPassword,
+  resendVerification,
   resetPassword,
   logout,
   verifyEmail,

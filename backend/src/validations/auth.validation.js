@@ -153,6 +153,16 @@ function validateForgotPassword(body = {}) {
 }
 
 /**
+ * Validate the POST /api/auth/resend-verification payload.
+ * Same rules as forgot-password: a single required, valid email.
+ * @param {object} body
+ * @returns {{ valid: boolean, errors: Record<string,string>, data: { email: string } }}
+ */
+function validateResendVerification(body = {}) {
+  return validateForgotPassword(body);
+}
+
+/**
  * Validate the POST /api/auth/reset-password payload.
  * @param {object} body
  * @returns {{ valid: boolean, errors: Record<string,string>, data: { resetToken: string, newPassword: string } }}
@@ -274,6 +284,7 @@ module.exports = {
   validateLogin,
   validateRefreshToken,
   validateForgotPassword,
+  validateResendVerification,
   validateResetPassword,
   validateLogout,
   validateUpdateProfile,

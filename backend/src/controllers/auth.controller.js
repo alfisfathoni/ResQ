@@ -5,12 +5,14 @@
 // here. All handlers are placeholders for now.
 
 const { sendSuccess, sendError } = require("../utils/response");
+const { renderMessagePage, sendHtml } = require("../utils/html-page");
 const authService = require("../services/auth.service");
 const {
   validateRegister,
   validateLogin,
   validateRefreshToken,
   validateForgotPassword,
+  validateResendVerification,
   validateResetPassword,
   validateLogout,
   validateUpdateProfile,
@@ -35,8 +37,10 @@ async function register(req, res) {
 
     return sendSuccess(res, {
       statusCode: 201,
-      message:
-        "Registration successful. Please check your email to verify your account.",
+      // isVerified is already true when the AUTO_VERIFY_EMAIL demo flag is on.
+      message: user.isVerified
+        ? "Registration successful. You can now log in."
+        : "Registration successful. Please check your email to verify your account.",
       data: user,
     });
   } catch (error) {
@@ -168,6 +172,42 @@ async function forgotPassword(req, res) {
     // Even on unexpected errors, avoid leaking account state. Log internally
     // and still return the generic success response.
     console.error("Forgot password error:", error);
+    return sendSuccess(res, {
+      statusCode: 200,
+      message: genericMessage,
+    });
+  }
+}
+
+/**
+ * POST /api/auth/resend-verification
+ * Validates the email, delegates to the service, and always returns the same
+ * success response so the existence or verification state of an account is
+ * never revealed.
+ */
+async function resendVerification(req, res) {
+  const genericMessage =
+    "If an unverified account exists with that email, a new verification link has been sent.";
+
+  try {
+    const { valid, errors, data } = validateResendVerification(req.body);
+    if (!valid) {
+      return sendError(res, {
+        statusCode: 422,
+        message: "Validation failed.",
+        errors,
+      });
+    }
+
+    await authService.resendVerification(data);
+
+    return sendSuccess(res, {
+      statusCode: 200,
+      message: genericMessage,
+    });
+  } catch (error) {
+    // Even on unexpected errors, avoid leaking account state.
+    console.error("Resend verification error:", error);
     return sendSuccess(res, {
       statusCode: 200,
       message: genericMessage,
@@ -360,31 +400,66 @@ async function logout(req, res) {
  * GET /api/auth/verify-email?token=...
  * Reads the token from the query string, delegates verification to the
  * service, and returns the verified user.
+ *
+ * Content negotiation: a browser opening the email link (Accept: text/html)
+ * gets a friendly HTML page; API clients (Accept: application/json, or a
+ * wildcard such as Postman's default) keep the JSON envelope. Status codes
+ * are identical in both formats.
  */
 async function verifyEmail(req, res) {
+  const wantsHtml = req.accepts(["json", "html"]) === "html";
+
   try {
     const { token } = req.query;
 
     const user = await authService.verifyEmail(token);
+    const message = "Email verified successfully. You can now log in.";
 
-    return sendSuccess(res, {
-      statusCode: 200,
-      message: "Email verified successfully. You can now log in.",
-      data: user,
-    });
-  } catch (error) {
-    if (error instanceof authService.ServiceError) {
-      return sendError(res, {
-        statusCode: error.statusCode,
-        message: error.message,
-        errors: error.errors,
+    if (wantsHtml) {
+      return sendHtml(res, {
+        html: renderMessagePage({
+          title: "Email verified",
+          message: "Your email has been verified. You can now log in from the ResQ app.",
+          variant: "success",
+        }),
       });
     }
 
-    console.error("Verify email error:", error);
+    return sendSuccess(res, {
+      statusCode: 200,
+      message,
+      data: user,
+    });
+  } catch (error) {
+    const known = error instanceof authService.ServiceError;
+    if (!known) {
+      console.error("Verify email error:", error);
+    }
+
+    const statusCode = known ? error.statusCode : 500;
+    const message = known
+      ? error.message
+      : "Something went wrong during email verification.";
+
+    if (wantsHtml) {
+      // 409 means the account is already verified: not a failure for the user.
+      const alreadyVerified = statusCode === 409;
+      return sendHtml(res, {
+        statusCode,
+        html: renderMessagePage({
+          title: alreadyVerified ? "Already verified" : "Verification failed",
+          message: alreadyVerified
+            ? "This account is already verified. You can log in from the ResQ app."
+            : `${message} You can request a new verification link from the ResQ app.`,
+          variant: alreadyVerified ? "info" : "error",
+        }),
+      });
+    }
+
     return sendError(res, {
-      statusCode: 500,
-      message: "Something went wrong during email verification.",
+      statusCode,
+      message,
+      errors: known ? error.errors : null,
     });
   }
 }
@@ -394,6 +469,7 @@ module.exports = {
   login,
   refreshToken,
   forgotPassword,
+  resendVerification,
   resetPassword,
   logout,
   verifyEmail,
