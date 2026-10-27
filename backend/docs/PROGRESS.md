@@ -1,6 +1,6 @@
 # ResQ Backend — Status Pengerjaan
 
-> **Terakhir diperbarui:** 2026-10-26 (Turn 2 / T2 — Security Middlewares & Standardized Pagination)
+> **Terakhir diperbarui:** 2026-10-27 (T3 — R-0.1, R-0.4, R-0.5, R-0.6; sebelumnya T2 — Security Middlewares & Standardized Pagination)
 > **Sumber kebenaran:** HANYA kode — seluruh `src/` (app.js, routes, controllers, services, validations, middleware, utils, config), `prisma/schema.prisma`, dan seluruh migrasi Prisma. Dokumentasi lama TIDAK dijadikan acuan.
 > **Metode:** Setiap file di `src/` dibaca baris per baris. Jika dokumen lama bertentangan dengan kode, kode yang menang dan dokumen diperbarui mengikuti kode.
 > **Aturan:** Setiap kali menyelesaikan atau mengubah fitur, perbarui tabel di bawah ini. Status yang jujur lebih berguna daripada status yang optimis.
@@ -82,6 +82,12 @@ Legenda status:
 | **R-1.1 Migrasi skema** | ✅ | Migrasi tunggal `resq_extend_schema`: model baru `SosAlert`, `Facility`, `ReportLike`, `ReportComment`; field baru di `User`, `SharingSession`, `IncidentReport`; enum baru dan nilai enum tambahan. **Model baru belum memiliki API** (tanpa route/controller/service). |
 
 ## Catatan Roadmap
+
+- **R-0.1 ✅ Environment dan hapus fallback secret JWT** — `utils/jwt.js` tidak lagi punya nilai default untuk keempat secret (`JWT_SECRET`, `JWT_REFRESH_SECRET`, `JWT_EMAIL_VERIFICATION_SECRET`, `JWT_PASSWORD_RESET_SECRET`) dan melempar error bila kosong. `config/env.js` (`validateEnv()`) dipanggil di awal `server.js`, sebelum `app.js` dimuat: server berhenti (exit 1) dengan pesan yang hanya menyebut **nama** variabel bila `DATABASE_URL` atau salah satu `JWT_*_SECRET` kosong. Berlaku di **semua environment**. Ditambah `.env.example` (hanya nama variabel). `.gitignore` sudah meng-ignore `.env`, `.env.*` (kecuali `.env.example`), dan isi `uploads/` (kecuali `.gitkeep`).
+  - **Temuan keamanan "fallback default secret JWT" (risiko pada audit, `AUDIT_REPORT.md`): ✅ sudah diperbaiki.** Tidak ada lagi secret yang jatuh ke nilai default atau saling meminjam secret lain.
+- **R-0.4 ✅ Script `package.json`** — `postinstall: prisma generate`; `start` = `prisma migrate deploy && node src/server.js`; `seed` = `node prisma/seed.js` (tanpa blok `prisma.seed`). Paket `prisma` (CLI) dipindah dari `devDependencies` ke `dependencies` agar `generate` dan `migrate deploy` tetap jalan di hosting yang tidak memasang devDependencies.
+- **R-0.5 ✅ Seed** — `prisma/seed.js` + `prisma/seed/guides.json`. Idempoten dan hanya menambah (tidak ada operasi hapus). (1) Akun `ADMIN` dari `ADMIN_EMAIL`/`ADMIN_PASSWORD` (`isVerified=true`); bila email sudah ada hanya dipromosikan, password tidak ditimpa kecuali `SEED_RESET_ADMIN_PASSWORD=true`. (2) 13 panduan Bahasa Indonesia mencakup `SAFETY`, `FIRST_AID`, `DISASTER`, `EMERGENCY`, `LEGAL` (2 item `LEGAL`); dibuat hanya bila kombinasi `title` + `category` belum ada. (3) 2 user demo hanya bila `SEED_DEMO_PASSWORD` terisi. Validator panduan kini menerima `LEGAL`. Konten panduan masih perlu diverifikasi manusia sebelum dipakai di produksi.
+- **R-0.6 ✅ `role` di respons login dan profil** — `role` (`USER`/`ADMIN`) sudah ada di `POST /api/auth/login` (`data.user`) dan `GET /api/auth/profile`. `toPublicUser()` diubah dari "buang password" menjadi whitelist (`PUBLIC_USER_SELECT`, juga dipakai `getProfile` dan `updateProfile`), sehingga field baru di model `User` tidak bocor tanpa disengaja. Payload JWT dan `auth.middleware.js` tidak diubah.
 
 - **R-1.1 ✅ Migrasi skema tunggal (SosAlert, Facility, ReportLike, ReportComment, field baru, enum baru)** — folder migrasi `prisma/migrations/20261026053638_resq_extend_schema/`, hanya berisi penambahan (tanpa `DROP`). Perubahan:
   - Enum baru: `ReportStatus`, `SosCategory`, `SosStatus`, `FacilityType`. Nilai baru: `GuideCategory.LEGAL`, `IncidentCategory.HARASSMENT`/`PUBLIC_FACILITY`, `NotificationType.SOS_ALERT`/`SHARE_ARRIVED`.
