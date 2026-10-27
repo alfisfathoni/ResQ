@@ -22,14 +22,39 @@ const {
   sendPasswordResetEmail,
 } = require("../utils/mailer");
 
+// Fields of a user that may be returned to the client (includes `role`, which
+// the mobile app uses after login to choose the user or admin home screen).
+// Single source of truth shared by toPublicUser(), getProfile(), and
+// updateProfile(). The password hash is deliberately absent.
+const PUBLIC_USER_SELECT = {
+  id: true,
+  fullName: true,
+  username: true,
+  email: true,
+  phoneNumber: true,
+  profilePicture: true,
+  role: true,
+  isVerified: true,
+  lastLatitude: true,
+  lastLongitude: true,
+  createdAt: true,
+  updatedAt: true,
+};
+
 /**
- * Strip sensitive fields from a user record before returning it to clients.
+ * Reduce a user record to the public whitelist (PUBLIC_USER_SELECT).
+ *
+ * Whitelist rather than "remove password", so a field added to the User model
+ * later is never exposed by accident.
  * @param {object} user
- * @returns {object} user without the password.
+ * @returns {object} user with only the allowed fields (including `role`).
  */
 function toPublicUser(user) {
   if (!user) return user;
-  const { password, ...safe } = user;
+  const safe = {};
+  for (const key of Object.keys(PUBLIC_USER_SELECT)) {
+    if (key in user) safe[key] = user[key];
+  }
   return safe;
 }
 
@@ -339,20 +364,7 @@ async function resetPassword({ resetToken, newPassword }) {
 async function getProfile(userId) {
   const user = await prisma.user.findUnique({
     where: { id: userId },
-    select: {
-      id: true,
-      fullName: true,
-      username: true,
-      email: true,
-      phoneNumber: true,
-      profilePicture: true,
-      role: true,
-      isVerified: true,
-      lastLatitude: true,
-      lastLongitude: true,
-      createdAt: true,
-      updatedAt: true,
-    },
+    select: PUBLIC_USER_SELECT,
   });
 
   if (!user) {
@@ -404,20 +416,7 @@ async function updateProfile(userId, updates) {
   const user = await prisma.user.update({
     where: { id: userId },
     data: updates,
-    select: {
-      id: true,
-      fullName: true,
-      username: true,
-      email: true,
-      phoneNumber: true,
-      profilePicture: true,
-      role: true,
-      isVerified: true,
-      lastLatitude: true,
-      lastLongitude: true,
-      createdAt: true,
-      updatedAt: true,
-    },
+    select: PUBLIC_USER_SELECT,
   });
 
   return user;

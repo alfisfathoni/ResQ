@@ -64,7 +64,7 @@ Dokumen ini menjaga konsistensi gaya kode saat berganti kontributor atau AI Agen
 - Data pengguna **selalu terikat ke pemilik** (`userId`), satu user tak boleh mengakses data user lain.
 - Token verifikasi email & reset password bersifat **stateless (JWT)** dengan klaim `type` — selalu cek `type` saat verifikasi agar token tak bisa dipakai lintas-tujuan.
 - Jangan commit `.env` atau menampilkan nilai rahasia di log/respons.
-- Di produksi, set semua `JWT_*_SECRET` (jangan andalkan fallback default di `utils/jwt.js`).
+- Semua `JWT_*_SECRET` (dan `DATABASE_URL`) **wajib diisi di semua environment** (development, test, production). Server menolak start tanpanya (`config/env.js`), dan `utils/jwt.js` tidak memiliki fallback. Jangan menambahkan nilai default untuk secret.
 
 ## Penambahan Fitur Baru (checklist)
 
