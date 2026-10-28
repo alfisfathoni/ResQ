@@ -24,6 +24,25 @@ const authLimiter = rateLimit({
   },
 });
 
+/**
+ * Strict rate limiter for endpoints that send email on demand (e.g. resend
+ * verification), so they cannot be used to spam an inbox or the SMTP account.
+ */
+const emailLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 5, // Max 5 requests per IP per window
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: "Too many email requests, please try again after 15 minutes.",
+  handler: (req, res, _next, options) => {
+    return sendError(res, {
+      statusCode: options.statusCode,
+      message: options.message,
+    });
+  },
+});
+
 module.exports = {
   authLimiter,
+  emailLimiter,
 };

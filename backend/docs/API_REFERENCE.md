@@ -74,10 +74,11 @@ Sejak Phase 2, penanganan error dipusatkan:
 
 ## Autentikasi — `/api/auth`
 
-Rate limit: Maksimal 20 requests per 15 menit per IP (status 429).
+Rate limit: Maksimal 20 requests per 15 menit per IP (status 429). Pengecualian: `POST /resend-verification` memakai limiter ketat tersendiri (5 request / 15 menit per IP).
 
 ### POST `/register` — publik
 Membuat akun baru (role default `USER`, `isVerified=false`) lalu mengirim email verifikasi.
+- **Flag demo `AUTO_VERIFY_EMAIL`** (env, default `false`): bila `true`, akun langsung dibuat dengan `isVerified=true`, email verifikasi **tidak** dikirim, dan pesan respons menjadi `"Registration successful. You can now log in."`. Hanya untuk dev lokal / demo saat SMTP mati — **jangan aktifkan di produksi**.
 Payload & aturan validasi:
 - `fullName` — wajib, maks 255 karakter.
 - `username` — wajib, 3-100 karakter, hanya huruf/angka/underscore/titik.
@@ -112,15 +113,27 @@ Payload & aturan validasi:
 ### POST `/forgot-password` — publik
 - `email` — wajib & valid.
 - **Selalu** balas **200** dengan pesan generik (cegah enumerasi akun), apa pun hasilnya.
+- Link di email mengarah ke halaman browser `APP_URL/reset-password?token=...` (lihat [Halaman Browser](#halaman-browser-dari-link-email)).
+
+### POST `/resend-verification` — publik
+Mengirim ulang email verifikasi untuk akun yang belum terverifikasi.
+- `email` — wajib & valid (disimpan lowercase).
+- Bila user ada **dan** `isVerified=false`: token verifikasi baru dibuat dan email dikirim. User tidak ada atau sudah terverifikasi: tidak ada aksi.
+- **Selalu** balas **200** dengan pesan generik `"If an unverified account exists with that email, a new verification link has been sent."` (cegah enumerasi), termasuk bila SMTP gagal.
+- Validasi gagal: **422**. Rate limit ketat: maks **5 request / 15 menit per IP**, lebih dari itu **429**.
 
 ### POST `/reset-password` — publik
 - `resetToken` — wajib (JWT bertipe `password_reset`).
 - `newPassword` — wajib, 8-72 karakter.
 - Sukses: **200**; semua refresh token user dihapus (semua sesi logout). Token invalid/kadaluarsa: **400**.
+- Endpoint ini juga dipanggil oleh form di halaman browser `GET /reset-password`.
 
 ### GET `/verify-email?token=...` — publik
 - `token` — dari query string (JWT bertipe `email_verification`).
-- Sukses: **200**, `data` = user terverifikasi. Sudah terverifikasi: **409**. Token invalid/kadaluarsa: **400**.
+- Sukses: **200**, `data` = user terverifikasi. Sudah terverifikasi: **409**. Token invalid/kadaluarsa/kosong: **400**. User tidak ada: **404**.
+- **Respons ganda (content negotiation via header `Accept`)**, status code sama di kedua format:
+  - Browser (`Accept: text/html`, mis. user membuka link di email) → halaman **HTML** ramah: "Email verified" (200), "Already verified" (409), atau "Verification failed" (400/404/500).
+  - Klien API (`Accept: application/json`, atau wildcard `*/*` seperti default Postman) → **JSON** standar (`sendSuccess`/`sendError`) seperti sebelumnya.
 
 ### GET `/profile` — butuh auth
 - Sukses: **200**, `data` = profil terkini (dibaca dari DB, bukan dari token). Memuat field **`role`** (`USER` atau `ADMIN`) dan tidak pernah memuat `password`. `PUT /profile` mengembalikan bentuk yang sama.
@@ -137,6 +150,16 @@ Update parsial, minimal satu field:
 
 ### POST `/logout` — butuh auth
 - `refreshToken` — wajib. Mencabut token milik user tsb (idempoten, tetap **200** jika sudah tidak ada).
+
+---
+
+## Halaman Browser (dari link email)
+
+Halaman HTML minimal (ramah HP) di root aplikasi, **bukan** di bawah `/api`. Header: `Cache-Control: no-store` dan CSP ketat (hanya script inline milik halaman via nonce, request hanya ke origin sendiri).
+
+| Method | Path | Auth | Status | Keterangan |
+| --- | --- | --- | --- | --- |
+| GET | `/reset-password?token=...` | — | 200 | Form "New password" + "Confirm password". Saat submit, JavaScript halaman memanggil `POST /api/auth/reset-password` dengan `{ resetToken, newPassword }` lalu menampilkan pesan inline (sukses: "Password reset successfully. You can now log in from the app."; gagal: pesan dari API). Validasi di sisi halaman: 8-72 karakter dan kedua field harus sama. Token tidak dicek saat halaman dibuka, hanya saat submit. Tanpa `token` → pesan "link invalid" dan form disembunyikan. |
 
 ---
 

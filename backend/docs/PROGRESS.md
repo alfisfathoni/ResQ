@@ -1,6 +1,6 @@
 # ResQ Backend — Status Pengerjaan
 
-> **Terakhir diperbarui:** 2026-10-27 (T3 — R-0.1, R-0.4, R-0.5, R-0.6; sebelumnya T2 — Security Middlewares & Standardized Pagination)
+> **Terakhir diperbarui:** 2026-10-27 (T4 — R-0.7; sebelumnya T3 — R-0.1, R-0.4, R-0.5, R-0.6)
 > **Sumber kebenaran:** HANYA kode — seluruh `src/` (app.js, routes, controllers, services, validations, middleware, utils, config), `prisma/schema.prisma`, dan seluruh migrasi Prisma. Dokumentasi lama TIDAK dijadikan acuan.
 > **Metode:** Setiap file di `src/` dibaca baris per baris. Jika dokumen lama bertentangan dengan kode, kode yang menang dan dokumen diperbarui mengikuti kode.
 > **Aturan:** Setiap kali menyelesaikan atau mengubah fitur, perbarui tabel di bawah ini. Status yang jujur lebih berguna daripada status yang optimis.
@@ -46,13 +46,14 @@ Legenda status:
 | Phase 2 — Item 2 | Global Error Handling | ✅ |
 | Turn 2 (T2) — 0.2 | Core Security & Logging (Helmet, Morgan, Rate Limit) | ✅ |
 | Turn 2 (T2) — 0.3 | Standardized Pagination & Metadata Response | ✅ |
+| Turn 4 (T4) — 0.7 | `resend-verification`, halaman reset password, verify-email HTML, flag `AUTO_VERIFY_EMAIL` | ✅ |
 | Phase 2 — Item 3 | API Documentation (Swagger/OpenAPI) | ⬜ |
 
 ## Status Per Fitur
 
 | Fitur | Status | Catatan (berdasarkan kode) |
 | --- | --- | --- |
-| **Authentication** | ✅ | register, login (email/username), refresh, logout, verify-email, forgot/reset-password. Diproteksi rate limiter (maks 20 req/15 min). Controller auth masih `try/catch` lokal. |
+| **Authentication** | ✅ | register, login (email/username), refresh, logout, verify-email (HTML untuk browser, JSON untuk API), resend-verification, forgot/reset-password (+ halaman browser `GET /reset-password`). Diproteksi rate limiter (maks 20 req/15 min; resend-verification 5 req/15 min). Controller auth masih `try/catch` lokal. |
 | **User Profile** | ✅ | Bagian modul auth: `GET/PUT/DELETE /api/auth/profile`. Update terbatas `fullName`, `phoneNumber`, `profilePicture`. DELETE menolak ADMIN (403). |
 | **Emergency Contact** | ✅ | CRUD penuh. Maks 5/user, `priority` unik 1-5, `phoneNumber` unik per user. Listing mendukung paginasi & meta. |
 | **Incident Report** | ✅ | CRUD penuh. `category` enum, koordinat divalidasi & di-serialize ke `Number`. Listing mendukung paginasi & meta. |
@@ -73,7 +74,7 @@ Legenda status:
 | **Auth Middleware** | ✅ | verifikasi Bearer, isi `req.user = { id, role }`, gagal → 401. |
 | **Cloudinary** | ✅ | `uploadBuffer`, `deleteAsset`, `publicIdFromUrl`. |
 | **JWT** | ✅ | 4 tipe token: access, refresh, email-verification, password-reset. |
-| **Mail** | ✅ | Nodemailer (lazy), email verifikasi & reset. |
+| **Mail** | ✅ | Nodemailer (lazy), email verifikasi & reset. Link reset mengarah ke `APP_URL/reset-password?token=`. |
 | **Prisma** | ✅ | Singleton client + verifikasi `SELECT 1` saat start. Skema + migrasi `init`. |
 | **API Reference (markdown)** | ✅ | `docs/API_REFERENCE.md` mencakup seluruh 9 modul (diverifikasi ulang terhadap route/controller/validasi). |
 | **Swagger / OpenAPI** | ⬜ | Belum ada dependency maupun setup di `app.js`. = Phase 2 Item 3. |
@@ -88,6 +89,12 @@ Legenda status:
 - **R-0.4 ✅ Script `package.json`** — `postinstall: prisma generate`; `start` = `prisma migrate deploy && node src/server.js`; `seed` = `node prisma/seed.js` (tanpa blok `prisma.seed`). Paket `prisma` (CLI) dipindah dari `devDependencies` ke `dependencies` agar `generate` dan `migrate deploy` tetap jalan di hosting yang tidak memasang devDependencies.
 - **R-0.5 ✅ Seed** — `prisma/seed.js` + `prisma/seed/guides.json`. Idempoten dan hanya menambah (tidak ada operasi hapus). (1) Akun `ADMIN` dari `ADMIN_EMAIL`/`ADMIN_PASSWORD` (`isVerified=true`); bila email sudah ada hanya dipromosikan, password tidak ditimpa kecuali `SEED_RESET_ADMIN_PASSWORD=true`. (2) 13 panduan Bahasa Indonesia mencakup `SAFETY`, `FIRST_AID`, `DISASTER`, `EMERGENCY`, `LEGAL` (2 item `LEGAL`); dibuat hanya bila kombinasi `title` + `category` belum ada. (3) 2 user demo hanya bila `SEED_DEMO_PASSWORD` terisi. Validator panduan kini menerima `LEGAL`. Konten panduan masih perlu diverifikasi manusia sebelum dipakai di produksi.
 - **R-0.6 ✅ `role` di respons login dan profil** — `role` (`USER`/`ADMIN`) sudah ada di `POST /api/auth/login` (`data.user`) dan `GET /api/auth/profile`. `toPublicUser()` diubah dari "buang password" menjadi whitelist (`PUBLIC_USER_SELECT`, juga dipakai `getProfile` dan `updateProfile`), sehingga field baru di model `User` tidak bocor tanpa disengaja. Payload JWT dan `auth.middleware.js` tidak diubah.
+- **R-0.7 ✅ Resend verifikasi, halaman reset password, flag `AUTO_VERIFY_EMAIL`** —
+  - `POST /api/auth/resend-verification` (body `{ email }`): kirim token verifikasi baru hanya bila user ada dan belum terverifikasi; **selalu 200** dengan pesan generik (anti-enumerasi). Limiter ketat baru `emailLimiter` (5 req / 15 menit per IP) di `rate-limit.middleware.js`.
+  - `GET /reset-password?token=` (router baru `page.routes.js` → `page.controller.js`, dipasang di root `app.js`): halaman HTML minimal ramah HP yang memanggil `POST /api/auth/reset-password`. Link di `utils/mailer.js` diubah ke path ini.
+  - `GET /api/auth/verify-email`: content negotiation (`req.accepts`) — browser dapat halaman HTML, klien API tetap JSON; status code sama.
+  - Util baru `utils/html-page.js` (render halaman + escape HTML + header CSP nonce dan `no-store`, karena CSP default helmet memblokir script inline).
+  - Flag `AUTO_VERIFY_EMAIL` (default `false`, ditambahkan ke `.env.example`): bila `true` akun baru langsung `isVerified=true` dan email verifikasi tidak dikirim. Hanya untuk dev/demo.
 
 - **R-1.1 ✅ Migrasi skema tunggal (SosAlert, Facility, ReportLike, ReportComment, field baru, enum baru)** — folder migrasi `prisma/migrations/20261026053638_resq_extend_schema/`, hanya berisi penambahan (tanpa `DROP`). Perubahan:
   - Enum baru: `ReportStatus`, `SosCategory`, `SosStatus`, `FacilityType`. Nilai baru: `GuideCategory.LEGAL`, `IncidentCategory.HARASSMENT`/`PUBLIC_FACILITY`, `NotificationType.SOS_ALERT`/`SHARE_ARRIVED`.
@@ -97,7 +104,8 @@ Legenda status:
 ## Endpoint yang tersedia (diverifikasi dari route + controller)
 
 - **Health**: `GET /`.
-- **Auth** `/api/auth`: `POST /register`, `POST /login`, `POST /refresh`, `POST /forgot-password`, `POST /reset-password`, `GET /verify-email`, `GET /profile`*, `PUT /profile`*, `DELETE /profile`*, `POST /logout`*. (Endpoint publik dilindungi rate limiter).
+- **Halaman browser**: `GET /reset-password?token=` (HTML).
+- **Auth** `/api/auth`: `POST /register`, `POST /login`, `POST /refresh`, `POST /forgot-password`, `POST /resend-verification`, `POST /reset-password`, `GET /verify-email` (HTML/JSON), `GET /profile`*, `PUT /profile`*, `DELETE /profile`*, `POST /logout`*. (Endpoint publik dilindungi rate limiter).
 - **Emergency Contact** `/api/emergency-contacts`* : `POST /`, `GET /` (paginasi), `PUT /:id`, `DELETE /:id`.
 - **Incident Report** `/api/reports`* : `POST /`, `GET /` (paginasi), `GET /:id`, `PUT /:id`, `DELETE /:id`.
 - **Report Media** `/api/reports/:reportId/media`* : `POST /`, `GET /` (paginasi), `DELETE /:mediaId`.
@@ -109,7 +117,7 @@ Legenda status:
 
 (* = butuh `Authorization: Bearer <accessToken>`)
 
-Seluruh router di atas terdaftar di `app.js` (9 feature router + health check), dan `errorHandler` global terpasang paling akhir.
+Seluruh router di atas terdaftar di `app.js` (9 feature router + router halaman browser + health check), dan `errorHandler` global terpasang paling akhir.
 
 ## Detail Terverifikasi
 
