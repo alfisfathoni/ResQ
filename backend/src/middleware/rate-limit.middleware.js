@@ -1,48 +1,77 @@
 // Rate limiting middleware.
 //
 // Protects sensitive endpoints (such as authentication and password reset)
-// against brute-force attacks and abuse.
+// against brute-force attacks and abuse. The maximum number of requests per
+// window is configurable through environment variables (defaults below are
+// the original hardcoded values) so many devices on one shared Wi-Fi/NAT
+// (for example during a demo) do not lock each other out.
 
 const { rateLimit } = require("express-rate-limit");
 const { sendError } = require("../utils/response");
+const { readPositiveInt } = require("../config/env");
+
+const WINDOW_MS = 15 * 60 * 1000; // 15 minutes
+
+// Default maximum requests per IP per window (override via env, see .env.example).
+const DEFAULT_AUTH_MAX = 20;
+const DEFAULT_EMAIL_MAX = 5;
+const DEFAULT_REFRESH_MAX = 100;
+
+/**
+ * Build a limiter that answers 429 through the standard sendError envelope.
+ * @param {object} options
+ * @param {number} options.max - Max requests per IP per window.
+ * @param {string} options.message - Message returned with the 429.
+ * @returns {import("express").RequestHandler}
+ */
+function buildLimiter({ max, message }) {
+  return rateLimit({
+    windowMs: WINDOW_MS,
+    limit: max,
+    standardHeaders: true, // Draft-6 RateLimit-* headers
+    legacyHeaders: false, // Disable deprecated X-RateLimit-* headers
+    message,
+    handler: (req, res, _next, options) => {
+      return sendError(res, {
+        statusCode: options.statusCode,
+        message: options.message,
+      });
+    },
+  });
+}
 
 /**
  * Rate limiter specifically for authentication endpoints to prevent brute-force attacks.
- * Restricts requests per IP within a 15-minute window.
+ * Restricts requests per IP within a 15-minute window (AUTH_RATE_LIMIT_MAX, default 20).
  */
-const authLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 20, // Max 20 requests per IP per window
-  standardHeaders: true, // Draft-6 RateLimit-* headers
-  legacyHeaders: false, // Disable deprecated X-RateLimit-* headers
+const authLimiter = buildLimiter({
+  max: readPositiveInt("AUTH_RATE_LIMIT_MAX", DEFAULT_AUTH_MAX),
   message: "Too many authentication attempts, please try again after 15 minutes.",
-  handler: (req, res, _next, options) => {
-    return sendError(res, {
-      statusCode: options.statusCode,
-      message: options.message,
-    });
-  },
 });
 
 /**
  * Strict rate limiter for endpoints that send email on demand (e.g. resend
  * verification), so they cannot be used to spam an inbox or the SMTP account.
+ * EMAIL_RATE_LIMIT_MAX, default 5 per 15 minutes.
  */
-const emailLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 5, // Max 5 requests per IP per window
-  standardHeaders: true,
-  legacyHeaders: false,
+const emailLimiter = buildLimiter({
+  max: readPositiveInt("EMAIL_RATE_LIMIT_MAX", DEFAULT_EMAIL_MAX),
   message: "Too many email requests, please try again after 15 minutes.",
-  handler: (req, res, _next, options) => {
-    return sendError(res, {
-      statusCode: options.statusCode,
-      message: options.message,
-    });
-  },
+});
+
+/**
+ * Looser limiter for POST /api/auth/refresh. The app refreshes access tokens
+ * automatically, so legitimate clients call it far more often than login, and
+ * it has its own counter so it does not eat into the login budget.
+ * REFRESH_RATE_LIMIT_MAX, default 100 per 15 minutes.
+ */
+const refreshLimiter = buildLimiter({
+  max: readPositiveInt("REFRESH_RATE_LIMIT_MAX", DEFAULT_REFRESH_MAX),
+  message: "Too many token refresh requests, please try again after 15 minutes.",
 });
 
 module.exports = {
   authLimiter,
   emailLimiter,
+  refreshLimiter,
 };

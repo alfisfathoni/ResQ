@@ -1,7 +1,6 @@
 const express = require("express");
 const cors = require("cors");
 const helmet = require("helmet");
-const morgan = require("morgan");
 
 const authRoutes = require("./routes/auth.routes");
 const emergencyContactRoutes = require("./routes/emergency-contact.routes");
@@ -14,17 +13,29 @@ const sharingSessionRoutes = require("./routes/sharing-session.routes");
 const userRoutes = require("./routes/user.routes");
 const pageRoutes = require("./routes/page.routes");
 const { errorHandler } = require("./middleware/error.middleware");
+const { createRequestLogger } = require("./middleware/request-logger.middleware");
+const { parseTrustProxy } = require("./config/env");
 
 // Create the Express application instance
 const app = express();
+
+// Behind a hosting proxy every request appears to come from the proxy's IP,
+// which breaks per-IP rate limiting. TRUST_PROXY (a hop count such as 1, or
+// true/false) makes Express read the client IP from X-Forwarded-For.
+// When the variable is unset nothing changes (Express default: not trusted).
+const trustProxy = parseTrustProxy();
+if (trustProxy !== undefined) {
+  app.set("trust proxy", trustProxy);
+}
 
 // --- Global Middleware ---
 
 // Secure HTTP headers
 app.use(helmet());
 
-// HTTP request logging
-app.use(morgan(process.env.NODE_ENV === "production" ? "combined" : "dev"));
+// HTTP request logging. Uses redacting tokens so ?token=... values from
+// email links never reach the logs.
+app.use(createRequestLogger());
 
 // Enable Cross-Origin Resource Sharing so the mobile client can call the API
 app.use(cors());
