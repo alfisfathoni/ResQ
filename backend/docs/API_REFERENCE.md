@@ -48,7 +48,7 @@ Semua respons melewati helper `utils/response.js`.
 
 - Field `data` **selalu ada** pada respons sukses (bernilai `null` jika tidak ada payload).
 - Seluruh listing endpoint mendukung query parameters `page` (default: 1) dan `limit` (default: 10, batas maksimal: 50).
-- Endpoint autentikasi sensitif (register, login, refresh, password requests) dilindungi oleh rate limiting (`express-rate-limit`, maks 20 request / 15 menit); melebihi kuota menghasilkan status **429**.
+- Endpoint autentikasi publik dilindungi oleh rate limiting per IP (`express-rate-limit`, jendela 15 menit); melebihi kuota menghasilkan status **429**. Default: register, login, forgot/reset password maks **20** (`AUTH_RATE_LIMIT_MAX`); `resend-verification` maks **5** (`EMAIL_RATE_LIMIT_MAX`); `refresh` maks **100** (`REFRESH_RATE_LIMIT_MAX`). Semua dapat diatur lewat env.
 - Header HTTP diamankan secara terpusat menggunakan middleware `helmet`.
 - Log request HTTP dicatat menggunakan `morgan` (`dev` format pada development).
 - Field `errors` berisi map `{ namaField: pesan }` saat validasi gagal; `null` untuk error umum.
@@ -74,7 +74,11 @@ Sejak Phase 2, penanganan error dipusatkan:
 
 ## Autentikasi — `/api/auth`
 
-Rate limit: Maksimal 20 requests per 15 menit per IP (status 429). Pengecualian: `POST /resend-verification` memakai limiter ketat tersendiri (5 request / 15 menit per IP).
+Rate limit per IP dalam jendela 15 menit (melebihi batas: status 429). Batas dapat diatur lewat env; angka di bawah adalah default:
+- `POST /register`, `/login`, `/forgot-password`, `/reset-password`: maks **20** request (`AUTH_RATE_LIMIT_MAX`).
+- `POST /resend-verification`: limiter ketat tersendiri, maks **5** request (`EMAIL_RATE_LIMIT_MAX`).
+- `POST /refresh`: limiter terpisah yang lebih longgar, maks **100** request (`REFRESH_RATE_LIMIT_MAX`), dan tidak memakai jatah login.
+- Di balik proxy hosting, set `TRUST_PROXY=1` agar IP klien terbaca benar (lihat `DEPLOYMENT.md`).
 
 ### POST `/register` — publik
 Membuat akun baru (role default `USER`, `isVerified=false`) lalu mengirim email verifikasi.
