@@ -84,12 +84,24 @@ Payload & aturan validasi:
 - `email` — wajib, format email valid, maks 255, disimpan lowercase.
 - `phoneNumber` — wajib, pola `^\+?\d{7,15}$` (opsional `+`, 7-15 digit).
 - `password` — wajib, 8-72 karakter.
-- Sukses: **201**, `data` = user tanpa password. Duplikat username/email/phone: **409** dengan `errors` per-field.
+- Sukses: **201**, `data` = user tanpa password (termasuk `role`, selalu `USER` untuk pendaftaran lewat API; akun `ADMIN` hanya dibuat lewat seed). Duplikat username/email/phone: **409** dengan `errors` per-field.
 
 ### POST `/login` — publik
 - `identifier` — email **atau** username (juga menerima `email`/`username` sebagai alias). Wajib.
 - `password` — wajib.
 - Sukses: **200**, `data` = `{ accessToken, refreshToken, user }`.
+- `user` memuat field **`role`** (`USER` atau `ADMIN`). Satu pintu login untuk user dan admin: FE membaca `data.user.role` untuk memilih halaman awal. Field `password` tidak pernah ikut. Contoh (dipersingkat):
+  ```json
+  {
+    "success": true,
+    "message": "Login successful.",
+    "data": {
+      "accessToken": "...",
+      "refreshToken": "...",
+      "user": { "id": "...", "fullName": "...", "username": "...", "email": "...", "role": "USER", "isVerified": true }
+    }
+  }
+  ```
 - Kredensial salah: **401** (`"Invalid credentials."`). Akun belum verifikasi: **403**.
 
 ### POST `/refresh` — publik
@@ -111,7 +123,7 @@ Payload & aturan validasi:
 - Sukses: **200**, `data` = user terverifikasi. Sudah terverifikasi: **409**. Token invalid/kadaluarsa: **400**.
 
 ### GET `/profile` — butuh auth
-- Sukses: **200**, `data` = profil terkini (dibaca dari DB, bukan dari token).
+- Sukses: **200**, `data` = profil terkini (dibaca dari DB, bukan dari token). Memuat field **`role`** (`USER` atau `ADMIN`) dan tidak pernah memuat `password`. `PUT /profile` mengembalikan bentuk yang sama.
 
 ### PUT `/profile` — butuh auth
 Update parsial, minimal satu field:
@@ -202,7 +214,7 @@ Konten panduan keselamatan yang dikelola admin. **Baca bersifat publik; tulis ha
 
 Payload & validasi (create):
 - `title` — wajib, maks 255.
-- `category` — wajib, salah satu enum `GuideCategory`: `SAFETY, FIRST_AID, DISASTER, EMERGENCY`.
+- `category` — wajib, salah satu enum `GuideCategory`: `SAFETY, FIRST_AID, DISASTER, EMERGENCY, LEGAL`.
 - `content` — wajib, string.
 - `thumbnail` — opsional, string atau `null`.
 - PUT bersifat parsial: minimal satu field; panduan tidak ada → **404**.

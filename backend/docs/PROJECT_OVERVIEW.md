@@ -43,7 +43,7 @@ Route  ->  Middleware  ->  Controller  ->  Service  ->  Prisma  ->  Database
 - **Utils** (`src/utils/`): helper pendukung:
   - `response.js` — `sendSuccess`/`sendError`, envelope respons konsisten.
   - `hash.js` — bcrypt (salt rounds dari env, default 10).
-  - `jwt.js` — sign/verify 4 jenis token: access, refresh, email-verification, password-reset.
+  - `jwt.js` — sign/verify 4 jenis token: access, refresh, email-verification, password-reset. Keempat secret wajib ada di env (tanpa fallback).
   - `mailer.js` — Nodemailer (transport lazy) + template email verifikasi & reset.
   - `cloudinary.js` — upload buffer, delete asset, derive `public_id` dari URL.
   - `service-error.js` — kelas **`ServiceError` bersama** dipakai seluruh service.
@@ -71,11 +71,13 @@ backend/
 ├── docs/                     # Dokumentasi proyek (folder ini)
 ├── prisma/
 │   ├── schema.prisma         # Skema database (source of truth untuk model)
+│   ├── seed.js               # Seed idempoten: admin, panduan, user demo (`npm run seed`)
+│   ├── seed/guides.json      # Konten panduan untuk seed
 │   └── migrations/           # Migrasi database
 ├── src/
 │   ├── app.js                # Setup Express app + registrasi route
 │   ├── server.js             # Entry point: start server + koneksi DB
-│   ├── config/               # prisma.js, db.js
+│   ├── config/               # prisma.js, db.js, env.js (validasi env saat start)
 │   ├── controllers/          # auth, emergency-contact, report, report-media, guide, friendship, notification, sharing-session, user
 │   ├── middleware/           # auth, role, upload, error
 │   ├── routes/               # definisi endpoint (9 router)
@@ -83,6 +85,7 @@ backend/
 │   ├── utils/                # jwt, hash, mailer, cloudinary, response, service-error, async-handler
 │   └── validations/          # validasi input per fitur
 ├── uploads/                  # penyimpanan sementara upload (ada .gitkeep)
+├── .env.example              # daftar nama variabel lingkungan (tanpa nilai rahasia)
 ├── .env                      # variabel lingkungan (JANGAN di-commit)
 └── package.json
 ```
@@ -107,27 +110,38 @@ backend/
 
 ## Variabel Lingkungan (`.env`)
 
-Kunci yang dibutuhkan (nilai rahasia tidak ditulis di sini):
+Kunci yang dibutuhkan (nilai rahasia tidak ditulis di sini). Daftar lengkap dengan komentar ada di `.env.example`; salin menjadi `.env` lalu isi.
 
-- **Server**: `PORT`, `APP_URL`
-- **Database**: `DATABASE_URL` (Neon PostgreSQL, wajib `sslmode=require`)
-- **JWT**: `JWT_SECRET`, `JWT_EXPIRES_IN`, `JWT_REFRESH_SECRET`, `JWT_REFRESH_EXPIRES_IN`, `JWT_EMAIL_VERIFICATION_SECRET`, `JWT_EMAIL_VERIFICATION_EXPIRES_IN`, `JWT_PASSWORD_RESET_SECRET`, `JWT_PASSWORD_RESET_EXPIRES_IN`
+- **Server**: `PORT`, `NODE_ENV`, `APP_URL`
+- **Database**: `DATABASE_URL` (**wajib**; Neon PostgreSQL, wajib `sslmode=require`)
+- **JWT**: `JWT_SECRET`, `JWT_REFRESH_SECRET`, `JWT_EMAIL_VERIFICATION_SECRET`, `JWT_PASSWORD_RESET_SECRET` (**keempatnya wajib**, tanpa fallback), serta masa berlaku opsional `JWT_EXPIRES_IN`, `JWT_REFRESH_EXPIRES_IN`, `JWT_EMAIL_VERIFICATION_EXPIRES_IN`, `JWT_PASSWORD_RESET_EXPIRES_IN`
 - **Hashing**: `BCRYPT_SALT_ROUNDS`
-- **Cloudinary**: `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET`
+- **Cloudinary**: `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET`, `CLOUDINARY_REPORT_FOLDER` (opsional)
 - **SMTP/Mail**: `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM`
+- **Seed (`ADMIN_*` dan `SEED_*`, hanya dibaca oleh `npm run seed`)**:
+  - `ADMIN_EMAIL`, `ADMIN_PASSWORD` — **wajib** untuk seed.
+  - `ADMIN_USERNAME` (default `admin`), `ADMIN_FULL_NAME` (default `ResQ Admin`), `ADMIN_PHONE` (opsional, harus unik dan sesuai `^\+?\d{7,15}$`) — opsional.
+  - `SEED_RESET_ADMIN_PASSWORD` — isi `true` hanya bila ingin menimpa password admin yang sudah ada (default: tidak menimpa).
+  - `SEED_DEMO_PASSWORD` — bila diisi, seed membuat 2 user demo (`demo.user1@example.com`, `demo.user2@example.com`); kosong = dilewati.
 
-> Catatan keamanan: `.env` berisi kredensial asli (DB, JWT secret, Cloudinary, SMTP). Jangan commit ke repository dan jangan tampilkan nilainya di dokumentasi.
+**Validasi saat start:** server (`src/config/env.js`) menolak start di **semua environment** bila `DATABASE_URL` atau salah satu `JWT_*_SECRET` kosong; pesan error hanya menyebut nama variabel.
+
+> Catatan keamanan: `.env` berisi kredensial asli (DB, JWT secret, Cloudinary, SMTP, password admin). Jangan commit ke repository dan jangan tampilkan nilainya di dokumentasi. `.env.example` hanya berisi nama variabel.
 
 ## Menjalankan Proyek
 
 ```bash
-npm install
-npx prisma generate          # generate Prisma client
-npx prisma migrate deploy    # terapkan migrasi ke database
-npm run dev                  # jalankan dengan nodemon (development)
-npm start                    # jalankan production
+cp .env.example .env         # lalu isi nilainya (jangan commit .env)
+npm install                  # otomatis menjalankan `prisma generate` (postinstall)
+npm run dev                  # development dengan nodemon (tidak menjalankan migrasi)
+npm start                    # production: `prisma migrate deploy` lalu `node src/server.js`
+npm run seed                 # isi akun admin, panduan, dan (opsional) user demo
 ```
+
+- `npm start` menerapkan migrasi yang tertunda sebelum server berjalan. Karena itu paket `prisma` (CLI) berada di `dependencies`, bukan `devDependencies`.
+- `npm run seed` idempoten dan hanya menambah data (aman diulang, tidak menghapus). Butuh `ADMIN_EMAIL` dan `ADMIN_PASSWORD` di `.env`. Panduan yang sudah ada (judul + kategori sama) tidak ditimpa. Untuk database baru, jalankan migrasi dulu (`npx prisma migrate deploy` atau `npm start`).
+- Akun admin hanya dibuat lewat seed (tidak ada pendaftaran admin dari API). Login memakai `POST /api/auth/login` dan FE membaca `data.user.role`.
 
 Health check: `GET /` mengembalikan `{ success: true, message: "ResQ Backend API is running" }`.
 
-> Catatan: `utils/jwt.js` memakai fallback default secret bila env kosong. Untuk produksi, set semua `JWT_*_SECRET` agar tidak memakai default yang lemah.
+> Catatan: semua `JWT_*_SECRET` dan `DATABASE_URL` wajib diisi; server menolak start bila ada yang kosong (tidak ada lagi fallback secret).

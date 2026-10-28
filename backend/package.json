@@ -5,8 +5,10 @@
   "main": "src/server.js",
   "type": "commonjs",
   "scripts": {
-    "start": "node src/server.js",
-    "dev": "nodemon src/server.js"
+    "postinstall": "prisma generate",
+    "start": "prisma migrate deploy && node src/server.js",
+    "dev": "nodemon src/server.js",
+    "seed": "node prisma/seed.js"
   },
   "keywords": [
     "resq",
@@ -28,10 +30,10 @@
     "jsonwebtoken": "^9.0.3",
     "morgan": "^1.12.1",
     "multer": "^2.4.0",
-    "nodemailer": "^10.1.7"
+    "nodemailer": "^10.1.7",
+    "prisma": "^6.19.3"
   },
   "devDependencies": {
-    "nodemon": "^3.1.14",
-    "prisma": "^6.19.3"
+    "nodemon": "^3.1.14"
   }
 }

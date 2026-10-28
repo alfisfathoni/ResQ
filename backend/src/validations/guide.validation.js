@@ -5,7 +5,7 @@
 // sanitized values the service should persist.
 
 // Valid GuideCategory enum values (must match prisma/schema.prisma exactly).
-const GUIDE_CATEGORIES = ["SAFETY", "FIRST_AID", "DISASTER", "EMERGENCY"];
+const GUIDE_CATEGORIES = ["SAFETY", "FIRST_AID", "DISASTER", "EMERGENCY", "LEGAL"];
 
 function isNonEmptyString(value) {
   return typeof value === "string" && value.trim().length > 0;

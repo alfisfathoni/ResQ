@@ -1,6 +1,11 @@
 // Load environment variables from the .env file into process.env
 require("dotenv").config();
 
+// Fail fast when required variables (DATABASE_URL, JWT_*_SECRET) are missing.
+// This must run BEFORE ./app is loaded, because modules loaded by the app
+// (e.g. utils/jwt.js) read secrets from process.env at load time.
+require("./config/env").validateEnv();
+
 const app = require("./app");
 const prisma = require("./config/prisma");
 const { verifyDatabaseConnection } = require("./config/db");
