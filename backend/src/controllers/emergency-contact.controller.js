@@ -5,8 +5,9 @@
 // thrown ServiceErrors (and any unexpected error) propagate to the global
 // error handler, which produces the standardized error response.
 
-const { sendSuccess, sendError } = require("../utils/response");
+const { sendSuccess, sendPaginated, sendError } = require("../utils/response");
 const { asyncHandler } = require("../utils/async-handler");
+const { parsePagination, buildPaginationMeta } = require("../utils/pagination");
 const emergencyContactService = require("../services/emergency-contact.service");
 const {
   validateCreateEmergencyContact,
@@ -42,14 +43,18 @@ const create = asyncHandler(async (req, res) => {
  * GET /api/emergency-contacts
  */
 const list = asyncHandler(async (req, res) => {
-  const contacts = await emergencyContactService.getEmergencyContacts(
-    req.user.id
+  const pagination = parsePagination(req.query);
+  const { contacts, total } = await emergencyContactService.getEmergencyContacts(
+    req.user.id,
+    pagination
   );
+  const meta = buildPaginationMeta(pagination.page, pagination.limit, total);
 
-  return sendSuccess(res, {
+  return sendPaginated(res, {
     statusCode: 200,
     message: "Emergency contacts retrieved successfully.",
     data: contacts,
+    meta,
   });
 });
 

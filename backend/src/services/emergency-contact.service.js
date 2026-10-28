@@ -75,14 +75,25 @@ async function createEmergencyContact(userId, data) {
 /**
  * List the authenticated user's emergency contacts, ordered by priority ASC.
  * @param {string} userId
- * @returns {Promise<object[]>}
+ * @param {object} [pagination={}] - Normalized pagination options { skip, take }.
+ * @returns {Promise<{ contacts: object[], total: number }>}
  */
-async function getEmergencyContacts(userId) {
-  return prisma.emergencyContact.findMany({
-    where: { userId },
-    orderBy: { priority: "asc" },
-    select: CONTACT_FIELDS,
-  });
+async function getEmergencyContacts(userId, pagination = {}) {
+  const { skip, take } = pagination;
+  const where = { userId };
+
+  const [contacts, total] = await Promise.all([
+    prisma.emergencyContact.findMany({
+      where,
+      orderBy: { priority: "asc" },
+      select: CONTACT_FIELDS,
+      ...(typeof skip === "number" ? { skip } : {}),
+      ...(typeof take === "number" ? { take } : {}),
+    }),
+    prisma.emergencyContact.count({ where }),
+  ]);
+
+  return { contacts, total };
 }
 
 /**

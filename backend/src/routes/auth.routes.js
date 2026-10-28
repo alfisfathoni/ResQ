@@ -1,20 +1,21 @@
 // Authentication routes.
 //
-// Maps /api/auth/* endpoints to their controller handlers. Validation and
-// auth middleware will be attached here as the endpoints are implemented.
+// Maps /api/auth/* endpoints to their controller handlers. Sensitive public
+// authentication endpoints are protected by rate limiting.
 
 const express = require("express");
 const authController = require("../controllers/auth.controller");
 const { authenticate } = require("../middleware/auth.middleware");
+const { authLimiter } = require("../middleware/rate-limit.middleware");
 
 const router = express.Router();
 
-// Public endpoints
-router.post("/register", authController.register);
-router.post("/login", authController.login);
-router.post("/refresh", authController.refreshToken);
-router.post("/forgot-password", authController.forgotPassword);
-router.post("/reset-password", authController.resetPassword);
+// Public endpoints (rate-limited against brute-force attacks)
+router.post("/register", authLimiter, authController.register);
+router.post("/login", authLimiter, authController.login);
+router.post("/refresh", authLimiter, authController.refreshToken);
+router.post("/forgot-password", authLimiter, authController.forgotPassword);
+router.post("/reset-password", authLimiter, authController.resetPassword);
 router.get("/verify-email", authController.verifyEmail);
 
 // Protected endpoints

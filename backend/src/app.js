@@ -1,5 +1,7 @@
 const express = require("express");
 const cors = require("cors");
+const helmet = require("helmet");
+const morgan = require("morgan");
 
 const authRoutes = require("./routes/auth.routes");
 const emergencyContactRoutes = require("./routes/emergency-contact.routes");
@@ -16,6 +18,12 @@ const { errorHandler } = require("./middleware/error.middleware");
 const app = express();
 
 // --- Global Middleware ---
+
+// Secure HTTP headers
+app.use(helmet());
+
+// HTTP request logging
+app.use(morgan(process.env.NODE_ENV === "production" ? "combined" : "dev"));
 
 // Enable Cross-Origin Resource Sharing so the mobile client can call the API
 app.use(cors());

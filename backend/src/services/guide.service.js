@@ -40,13 +40,23 @@ async function createGuide(data) {
 
 /**
  * List all guides, newest first. Public.
- * @returns {Promise<object[]>}
+ * @param {object} [pagination={}] - Normalized pagination options { skip, take }.
+ * @returns {Promise<{ guides: object[], total: number }>}
  */
-async function getGuides() {
-  return prisma.guide.findMany({
-    orderBy: { createdAt: "desc" },
-    select: GUIDE_FIELDS,
-  });
+async function getGuides(pagination = {}) {
+  const { skip, take } = pagination;
+
+  const [guides, total] = await Promise.all([
+    prisma.guide.findMany({
+      orderBy: { createdAt: "desc" },
+      select: GUIDE_FIELDS,
+      ...(typeof skip === "number" ? { skip } : {}),
+      ...(typeof take === "number" ? { take } : {}),
+    }),
+    prisma.guide.count(),
+  ]);
+
+  return { guides, total };
 }
 
 /**

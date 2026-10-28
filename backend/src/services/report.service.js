@@ -57,15 +57,28 @@ async function createReport(userId, data) {
 /**
  * List the authenticated user's reports, newest first.
  * @param {string} userId
- * @returns {Promise<object[]>}
+ * @param {object} [pagination={}] - Normalized pagination options { skip, take }.
+ * @returns {Promise<{ reports: object[], total: number }>}
  */
-async function getReports(userId) {
-  const reports = await prisma.incidentReport.findMany({
-    where: { userId },
-    orderBy: { createdAt: "desc" },
-    select: REPORT_FIELDS,
-  });
-  return reports.map(serializeReport);
+async function getReports(userId, pagination = {}) {
+  const { skip, take } = pagination;
+  const where = { userId };
+
+  const [reports, total] = await Promise.all([
+    prisma.incidentReport.findMany({
+      where,
+      orderBy: { createdAt: "desc" },
+      select: REPORT_FIELDS,
+      ...(typeof skip === "number" ? { skip } : {}),
+      ...(typeof take === "number" ? { take } : {}),
+    }),
+    prisma.incidentReport.count({ where }),
+  ]);
+
+  return {
+    reports: reports.map(serializeReport),
+    total,
+  };
 }
 
 /**
