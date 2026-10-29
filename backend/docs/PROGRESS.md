@@ -1,6 +1,6 @@
 # ResQ Backend — Status Pengerjaan
 
-> **Terakhir diperbarui:** 2026-10-27 (T4 — R-0.7; sebelumnya T3 — R-0.1, R-0.4, R-0.5, R-0.6)
+> **Terakhir diperbarui:** 2026-10-28 (T5 — R-0.8 bagian kode; sebelumnya T4 — R-0.7, T3 — R-0.1, R-0.4, R-0.5, R-0.6)
 > **Sumber kebenaran:** HANYA kode — seluruh `src/` (app.js, routes, controllers, services, validations, middleware, utils, config), `prisma/schema.prisma`, dan seluruh migrasi Prisma. Dokumentasi lama TIDAK dijadikan acuan.
 > **Metode:** Setiap file di `src/` dibaca baris per baris. Jika dokumen lama bertentangan dengan kode, kode yang menang dan dokumen diperbarui mengikuti kode.
 > **Aturan:** Setiap kali menyelesaikan atau mengubah fitur, perbarui tabel di bawah ini. Status yang jujur lebih berguna daripada status yang optimis.
@@ -47,13 +47,14 @@ Legenda status:
 | Turn 2 (T2) — 0.2 | Core Security & Logging (Helmet, Morgan, Rate Limit) | ✅ |
 | Turn 2 (T2) — 0.3 | Standardized Pagination & Metadata Response | ✅ |
 | Turn 4 (T4) — 0.7 | `resend-verification`, halaman reset password, verify-email HTML, flag `AUTO_VERIFY_EMAIL` | ✅ |
+| Turn 5 (T5) — 0.8 | Persiapan deploy (bagian kode + panduan): `trust proxy`, redaksi token di log, rate limit dapat diatur, `DEPLOYMENT.md`. **Deploy belum dilakukan.** | ✅ (kode) / ⬜ (deploy) |
 | Phase 2 — Item 3 | API Documentation (Swagger/OpenAPI) | ⬜ |
 
 ## Status Per Fitur
 
 | Fitur | Status | Catatan (berdasarkan kode) |
 | --- | --- | --- |
-| **Authentication** | ✅ | register, login (email/username), refresh, logout, verify-email (HTML untuk browser, JSON untuk API), resend-verification, forgot/reset-password (+ halaman browser `GET /reset-password`). Diproteksi rate limiter (maks 20 req/15 min; resend-verification 5 req/15 min). Controller auth masih `try/catch` lokal. |
+| **Authentication** | ✅ | register, login (email/username), refresh, logout, verify-email (HTML untuk browser, JSON untuk API), resend-verification, forgot/reset-password (+ halaman browser `GET /reset-password`). Diproteksi rate limiter (default maks 20 req/15 min; resend-verification 5 req/15 min; refresh 100 req/15 min; semuanya dapat diatur lewat env). Controller auth masih `try/catch` lokal. |
 | **User Profile** | ✅ | Bagian modul auth: `GET/PUT/DELETE /api/auth/profile`. Update terbatas `fullName`, `phoneNumber`, `profilePicture`. DELETE menolak ADMIN (403). |
 | **Emergency Contact** | ✅ | CRUD penuh. Maks 5/user, `priority` unik 1-5, `phoneNumber` unik per user. Listing mendukung paginasi & meta. |
 | **Incident Report** | ✅ | CRUD penuh. `category` enum, koordinat divalidasi & di-serialize ke `Number`. Listing mendukung paginasi & meta. |
@@ -64,7 +65,7 @@ Legenda status:
 | **Sharing Session** | ✅ | start (ke semua teman ACCEPTED), list active, detail, stop. Satu sesi aktif per owner. Listing aktif mendukung paginasi & meta. |
 | **User Utility** | ✅ | search (by username/fullName), detail (+`friendshipStatus`), list friends. Hanya field publik. Search & friends list mendukung paginasi & meta. |
 | **Notification Integration** | ✅ | friendship (FRIEND_REQUEST, FRIEND_ACCEPTED) & sharing session (SHARE_SESSION) membuat notifikasi best-effort via `notification.service`. |
-| **Security & Logging** | ✅ | Helmet secure headers, Morgan HTTP request logging, express-rate-limit pada auth endpoints. |
+| **Security & Logging** | ✅ | Helmet secure headers, Morgan HTTP request logging (nilai `?token=` diganti `[REDACTED]`), express-rate-limit pada auth endpoints (batas dapat diatur via env), `trust proxy` via env `TRUST_PROXY`. |
 | **Standardized Pagination** | ✅ | Helper `utils/pagination.js` (`parsePagination`, `buildPaginationMeta`) + `sendPaginated` di `utils/response.js`. Capped limit 50. |
 | **Global Error Handler** | ✅ | `middleware/error.middleware.js` terdaftar terakhir di `app.js`; map `ServiceError` + 500 generik tanpa bocor stack. |
 | **Shared ServiceError** | ✅ | `utils/service-error.js`; tiap service import & re-export. Tidak ada lagi duplikasi kelas. |
@@ -95,6 +96,12 @@ Legenda status:
   - `GET /api/auth/verify-email`: content negotiation (`req.accepts`) — browser dapat halaman HTML, klien API tetap JSON; status code sama.
   - Util baru `utils/html-page.js` (render halaman + escape HTML + header CSP nonce dan `no-store`, karena CSP default helmet memblokir script inline).
   - Flag `AUTO_VERIFY_EMAIL` (default `false`, ditambahkan ke `.env.example`): bila `true` akun baru langsung `isVerified=true` dan email verifikasi tidak dikirim. Hanya untuk dev/demo.
+- **R-0.8 ✅ (bagian kode) Persiapan deploy: trust proxy, redaksi log, rate limit dapat diatur, panduan deploy** — **Bagian kode sudah selesai.** **Deploy itu sendiri BELUM dilakukan dan sengaja ditunda sampai mendekati demo** (belum ada URL hidup). Platform final belum dikunci (rencana: Railway), dan `DEPLOYMENT.md` berstatus DRAF yang akan diperbarui saat deploy dilakukan. Catatan: Render dan Railway gratis memblokir SMTP, jadi email di hosting kemungkinan perlu API HTTPS penyedia email (perubahan `utils/mailer.js`, belum dikerjakan). Status deploy diperbarui manual setelah layanan hidup dan checklist di `DEPLOYMENT.md` lolos.
+  - `TRUST_PROXY` (angka jumlah hop, mis. `1`; `true`/`false` juga diterima; kosong = perilaku lama) → `app.set("trust proxy", ...)` di `app.js`, parser di `config/env.js`. Dengan angka, `express-rate-limit` 8.x tidak melempar galat validasi `X-Forwarded-For`; `true` hanya memunculkan peringatan `ERR_ERL_PERMISSIVE_TRUST_PROXY` di log.
+  - `middleware/request-logger.middleware.js`: token morgan `safe-url` dan `safe-referrer` mengganti nilai parameter `token` menjadi `[REDACTED]` pada format `dev` dan `combined` (produksi). `console.*` lain di `src/` sudah diperiksa: tidak ada yang mencetak URL atau token.
+  - Rate limit: keadaan awal hardcoded (`authLimiter` 20, `emailLimiter` 5 per 15 menit, dan `/refresh` ikut `authLimiter`). Kini `AUTH_RATE_LIMIT_MAX` (20), `EMAIL_RATE_LIMIT_MAX` (5), dan limiter terpisah `refreshLimiter` untuk `POST /api/auth/refresh` via `REFRESH_RATE_LIMIT_MAX` (100). Respons 429 tetap lewat `sendError`.
+  - `package.json`: `engines.node` = `>=22`.
+  - Panduan lengkap: `docs/DEPLOYMENT.md`.
 
 - **R-1.1 ✅ Migrasi skema tunggal (SosAlert, Facility, ReportLike, ReportComment, field baru, enum baru)** — folder migrasi `prisma/migrations/20261026053638_resq_extend_schema/`, hanya berisi penambahan (tanpa `DROP`). Perubahan:
   - Enum baru: `ReportStatus`, `SosCategory`, `SosStatus`, `FacilityType`. Nilai baru: `GuideCategory.LEGAL`, `IncidentCategory.HARASSMENT`/`PUBLIC_FACILITY`, `NotificationType.SOS_ALERT`/`SHARE_ARRIVED`.
@@ -131,7 +138,8 @@ Seluruh router di atas terdaftar di `app.js` (9 feature router + router halaman 
 ### Keamanan & Logging (Turn 2)
 - **Helmet**: mengamankan header HTTP standar di root `app.js`.
 - **Morgan**: mencatat request HTTP masuk (`dev` format).
-- **Rate limiting**: `express-rate-limit` dipasang di `auth.routes.js` pada register, login, refresh, dan password requests (maks 20 request / 15 menit). Melebihi kuota menghasilkan status **429** (`sendError`).
+- **Rate limiting**: `express-rate-limit` dipasang di `auth.routes.js`: register, login, forgot/reset password memakai `authLimiter` (default 20 request / 15 menit), `resend-verification` memakai `emailLimiter` (default 5), `refresh` memakai `refreshLimiter` (default 100). Batas diatur lewat `AUTH_RATE_LIMIT_MAX`, `EMAIL_RATE_LIMIT_MAX`, `REFRESH_RATE_LIMIT_MAX`. Melebihi kuota menghasilkan status **429** (`sendError`).
+- **Morgan**: token `?token=` pada URL dan referrer diganti `[REDACTED]` agar tidak masuk log.
 
 ### Paginasi & Metadata Response (Turn 2)
 - Format respons paginasi:

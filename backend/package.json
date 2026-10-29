@@ -4,6 +4,9 @@
   "description": "Backend API for the ResQ mobile application",
   "main": "src/server.js",
   "type": "commonjs",
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
     "postinstall": "prisma generate",
     "start": "prisma migrate deploy && node src/server.js",

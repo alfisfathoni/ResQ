@@ -53,6 +53,8 @@ Route  ->  Middleware  ->  Controller  ->  Service  ->  Prisma  ->  Database
   - `db.js` — `verifyDatabaseConnection()` jalankan `SELECT 1` saat start; gagal tidak memblokir server.
 
 ### Middleware
+- `request-logger.middleware.js` — logging `morgan` dengan token kustom `safe-url` dan `safe-referrer` yang mengganti nilai parameter `token` menjadi `[REDACTED]` (format `dev` dan produksi).
+- `rate-limit.middleware.js` — `authLimiter`, `emailLimiter`, `refreshLimiter`; batasnya dapat diatur lewat env (lihat "Variabel Lingkungan").
 - `auth.middleware.js` — verifikasi `Authorization: Bearer <token>`, isi `req.user = { id, role }`; gagal → 401.
 - `upload.middleware.js` — multer memory storage, limit 20MB, hanya `image/*` & `video/*`.
 - `role.middleware.js` — `authorize(...roles)` **sudah diimplementasikan** (cek `req.user.role`; tanpa identitas → 401, role tak diizinkan → 403) + guard `isAdmin` untuk route admin.
@@ -112,7 +114,9 @@ backend/
 
 Kunci yang dibutuhkan (nilai rahasia tidak ditulis di sini). Daftar lengkap dengan komentar ada di `.env.example`; salin menjadi `.env` lalu isi.
 
-- **Server**: `PORT`, `NODE_ENV`, `APP_URL`
+- **Server**: `PORT`, `NODE_ENV`, `APP_URL`, `TRUST_PROXY` (opsional; isi angka jumlah proxy, mis. `1`, saat di balik proxy hosting agar rate limit membaca IP klien yang benar; kosong = tidak dipercaya)
+- **Rate limit (opsional, maks request per IP per 15 menit)**: `AUTH_RATE_LIMIT_MAX` (default 20), `EMAIL_RATE_LIMIT_MAX` (default 5), `REFRESH_RATE_LIMIT_MAX` (default 100, khusus `POST /api/auth/refresh`)
+- **Demo**: `AUTO_VERIFY_EMAIL` (default `false`; jangan aktif di luar demo)
 - **Database**: `DATABASE_URL` (**wajib**; Neon PostgreSQL, wajib `sslmode=require`)
 - **JWT**: `JWT_SECRET`, `JWT_REFRESH_SECRET`, `JWT_EMAIL_VERIFICATION_SECRET`, `JWT_PASSWORD_RESET_SECRET` (**keempatnya wajib**, tanpa fallback), serta masa berlaku opsional `JWT_EXPIRES_IN`, `JWT_REFRESH_EXPIRES_IN`, `JWT_EMAIL_VERIFICATION_EXPIRES_IN`, `JWT_PASSWORD_RESET_EXPIRES_IN`
 - **Hashing**: `BCRYPT_SALT_ROUNDS`
@@ -141,6 +145,8 @@ npm run seed                 # isi akun admin, panduan, dan (opsional) user demo
 - `npm start` menerapkan migrasi yang tertunda sebelum server berjalan. Karena itu paket `prisma` (CLI) berada di `dependencies`, bukan `devDependencies`.
 - `npm run seed` idempoten dan hanya menambah data (aman diulang, tidak menghapus). Butuh `ADMIN_EMAIL` dan `ADMIN_PASSWORD` di `.env`. Panduan yang sudah ada (judul + kategori sama) tidak ditimpa. Untuk database baru, jalankan migrasi dulu (`npx prisma migrate deploy` atau `npm start`).
 - Akun admin hanya dibuat lewat seed (tidak ada pendaftaran admin dari API). Login memakai `POST /api/auth/login` dan FE membaca `data.user.role`.
+
+Untuk menjalankan backend di hosting cloud (HTTPS, URL publik), ikuti panduan di [`DEPLOYMENT.md`](DEPLOYMENT.md).
 
 Health check: `GET /` mengembalikan `{ success: true, message: "ResQ Backend API is running" }`.
 
