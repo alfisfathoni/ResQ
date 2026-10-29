@@ -1,5 +1,7 @@
 # ResQ Backend — Panduan Deploy
 
+> **Status: DRAF.** Deploy ditunda sampai mendekati demo. Platform final belum dikunci (rencana: Railway). Beberapa platform gratis (Render, Railway) memblokir SMTP, sehingga email di hosting perlu memakai API HTTPS penyedia email. Dokumen ini akan diperbarui saat deploy dilakukan.
+
 Panduan ini untuk menjalankan backend ResQ di hosting cloud supaya bisa diakses lewat HTTPS dari HP dan aplikasi Android. Ditulis untuk yang baru pertama kali deploy: ikuti urutannya dari atas ke bawah.
 
 > **Status:** tugas roadmap 0.8 (T5). Perubahan kode untuk produksi sudah ada di repo. **Deploy itu sendiri belum dilakukan**; isi URL layanan di `PROGRESS.md` setelah layanan hidup dan checklist di bagian 5 lolos.
