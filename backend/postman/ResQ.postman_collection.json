@@ -1,0 +1,2386 @@
+{
+  "info": {
+    "_postman_id": "ebbd54bf-a5ba-4150-b9d7-f3eabd540291",
+    "name": "ResQ Backend API",
+    "description": "Collection untuk backend ResQ (Express + Prisma). Rujukan lengkap: `docs/API_REFERENCE.md`.\n\n**Cara pakai**\n1. Import collection ini dan `ResQ.postman_environment.json`, lalu pilih environment **ResQ Local** di pojok kanan atas.\n2. Isi variabel `email` dan `password` (akun uji milik Anda), jalankan **Auth -> Register**, buka link verifikasi di email, lalu **Auth -> Login**. Token tersimpan otomatis.\n3. Untuk request admin, isi `adminEmail` dan `adminPassword` (akun hasil seed) lalu jalankan **Auth -> Login Admin**.\n\n**Base URL**\n- `baseUrl` default `http://localhost:3000`.\n- Setelah backend di-deploy, ganti nilainya dengan URL deploy (HTTPS, tanpa garis miring di akhir).\n- Emulator Android memakai `http://10.0.2.2:3000` untuk mengakses backend di laptop.\n\n**Auth:** Bearer `{{accessToken}}` diatur di level collection. Request publik memakai No Auth; request admin memakai `{{adminAccessToken}}`.\n\n**Perhatian:** database cloud dipakai bersama. Jangan menyimpan kredensial nyata di file ini; isi nilai hanya di environment lokal. Request bertanda ⚠️ (Delete Account, Delete Report, Delete Media, Delete Guide) bersifat destruktif dan permanen.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{accessToken}}",
+        "type": "string"
+      }
+    ]
+  },
+  "item": [
+    {
+      "name": "Health",
+      "description": "Cek apakah API hidup. Tidak butuh auth dan tidak menyentuh database.",
+      "item": [
+        {
+          "name": "Health Check",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", function () { pm.response.to.have.status(200); });",
+                  "pm.test(\"Body JSON: success sesuai status\", function () {",
+                  "  var json = pm.response.json();",
+                  "  pm.expect(json.success).to.eql(pm.response.code < 400);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": []
+            },
+            "description": "`GET /` -> 200 `{ success: true, message: \"ResQ Backend API is running\" }`.",
+            "auth": {
+              "type": "noauth"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Auth",
+      "description": "Semua endpoint di `/api/auth`. Endpoint publik: register, login, refresh, forgot/reset password, resend-verification, verify-email. Sisanya butuh Bearer `{{accessToken}}`.\n\nRate limit per IP / 15 menit (429 bila terlampaui): register, login, forgot/reset password = 20 (`AUTH_RATE_LIMIT_MAX`); resend-verification = 5 (`EMAIL_RATE_LIMIT_MAX`); refresh = 100 (`REFRESH_RATE_LIMIT_MAX`).",
+      "item": [
+        {
+          "name": "Register",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 201\", function () { pm.response.to.have.status(201); });",
+                  "pm.test(\"Body JSON: success sesuai status\", function () {",
+                  "  var json = pm.response.json();",
+                  "  pm.expect(json.success).to.eql(pm.response.code < 400);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/register",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "register"
+              ]
+            },
+            "description": "Buat akun baru (role `USER`, `isVerified=false`) lalu kirim email verifikasi. Sukses **201**; duplikat username/email/phone **409**; validasi gagal **422**.\n\nAturan: `fullName` maks 255; `username` 3-100 (huruf/angka/_/.); `email` valid; `phoneNumber` `^\\+?\\d{7,15}$`; `password` 8-72 karakter. Username dan nomor telepon contoh memakai `{{$timestamp}}` supaya unik. Isi variabel environment `email` dan `password` lebih dulu. Bila `AUTO_VERIFY_EMAIL=true` di server, akun langsung terverifikasi.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"fullName\": \"Demo User\",\n  \"username\": \"demo_{{$timestamp}}\",\n  \"email\": \"{{email}}\",\n  \"phoneNumber\": \"08{{$timestamp}}\",\n  \"password\": \"{{password}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          }
+        },
+        {
+          "name": "Login",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", function () { pm.response.to.have.status(200); });",
+                  "pm.test(\"Body JSON: success sesuai status\", function () {",
+                  "  var json = pm.response.json();",
+                  "  pm.expect(json.success).to.eql(pm.response.code < 400);",
+                  "});",
+                  "if (pm.response.code === 200) {",
+                  "  var json = pm.response.json();",
+                  "  pm.environment.set(\"accessToken\", json.data.accessToken);",
+                  "  pm.environment.set(\"refreshToken\", json.data.refreshToken);",
+                  "  pm.environment.set(\"userId\", json.data.user.id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "login"
+              ]
+            },
+            "description": "Login satu pintu untuk user dan admin. `identifier` boleh email atau username. Sukses **200**: `data = { accessToken, refreshToken, user }` dan `data.user.role` (`USER`/`ADMIN`). Script test menyimpan `accessToken`, `refreshToken`, dan `userId` ke environment. Kredensial salah **401**; akun belum terverifikasi **403**.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"identifier\": \"{{email}}\",\n  \"password\": \"{{password}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          }
+        },
+        {
+          "name": "Login Admin",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", function () { pm.response.to.have.status(200); });",
+                  "pm.test(\"Body JSON: success sesuai status\", function () {",
+                  "  var json = pm.response.json();",
+                  "  pm.expect(json.success).to.eql(pm.response.code < 400);",
+                  "});",
+                  "if (pm.response.code === 200) {",
+                  "  var json = pm.response.json();",
+                  "  pm.environment.set(\"adminAccessToken\", json.data.accessToken);",
+                  "  pm.test(\"role = ADMIN\", function () { pm.expect(json.data.user.role).to.eql(\"ADMIN\"); });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "login"
+              ]
+            },
+            "description": "Sama seperti Login, tetapi memakai `adminEmail` dan `adminPassword` (akun ADMIN hasil `npm run seed`). Token disimpan ke `adminAccessToken` (dipakai request admin di folder Guides). Isi `adminEmail` dan `adminPassword` di environment secara lokal; **jangan commit** nilainya. Test memeriksa `data.user.role = ADMIN`.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"identifier\": \"{{adminEmail}}\",\n  \"password\": \"{{adminPassword}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          }
+        },
+        {
+          "name": "Refresh Token",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", function () { pm.response.to.have.status(200); });",
+                  "pm.test(\"Body JSON: success sesuai status\", function () {",
+                  "  var json = pm.response.json();",
+                  "  pm.expect(json.success).to.eql(pm.response.code < 400);",
+                  "});",
+                  "if (pm.response.code === 200) {",
+                  "  pm.environment.set(\"accessToken\", pm.response.json().data.accessToken);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/refresh",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "refresh"
+              ]
+            },
+            "description": "Tukar refresh token dengan access token baru (`data = { accessToken }`; refresh token tidak diganti). Token kadaluarsa/invalid/dicabut **401**. Limiter terpisah (default 100 / 15 menit).",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refreshToken\": \"{{refreshToken}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          }
+        },
+        {
+          "name": "Forgot Password",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", function () { pm.response.to.have.status(200); });",
+                  "pm.test(\"Body JSON: success sesuai status\", function () {",
+                  "  var json = pm.response.json();",
+                  "  pm.expect(json.success).to.eql(pm.response.code < 400);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/forgot-password",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "forgot-password"
+              ]
+            },
+            "description": "Kirim email reset password. **Selalu 200** dengan pesan generik (anti-enumerasi). Link di email membuka halaman `GET /reset-password?token=...`.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{email}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          }
+        },
+        {
+          "name": "Resend Verification",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", function () { pm.response.to.have.status(200); });",
+                  "pm.test(\"Body JSON: success sesuai status\", function () {",
+                  "  var json = pm.response.json();",
+                  "  pm.expect(json.success).to.eql(pm.response.code < 400);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/resend-verification",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "resend-verification"
+              ]
+            },
+            "description": "Kirim ulang email verifikasi. **Selalu 200** dengan pesan generik (anti-enumerasi); email hanya terkirim bila akun ada dan belum terverifikasi. Validasi gagal **422**. Rate limit ketat: 5 / 15 menit per IP (429).",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{email}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          }
+        },
+        {
+          "name": "Reset Password",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200 atau 400\", function () { pm.expect([200, 400]).to.include(pm.response.code); });",
+                  "pm.test(\"Body JSON: success sesuai status\", function () {",
+                  "  var json = pm.response.json();",
+                  "  pm.expect(json.success).to.eql(pm.response.code < 400);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/reset-password",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "reset-password"
+              ]
+            },
+            "description": "Setel password baru dengan token reset dari email (salin ke variabel `resetToken`). `newPassword` 8-72 karakter. Sukses **200** dan semua sesi logout; token invalid/kadaluarsa **400** (test menerima 200 atau 400 karena butuh token asli).",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"resetToken\": \"{{resetToken}}\",\n  \"newPassword\": \"{{newPassword}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          }
+        },
+        {
+          "name": "Verify Email",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200 atau 400 atau 409\", function () { pm.expect([200, 400, 409]).to.include(pm.response.code); });",
+                  "pm.test(\"Body JSON: success sesuai status\", function () {",
+                  "  var json = pm.response.json();",
+                  "  pm.expect(json.success).to.eql(pm.response.code < 400);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/verify-email?token={{verificationToken}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "verify-email"
+              ],
+              "query": [
+                {
+                  "key": "token",
+                  "value": "{{verificationToken}}",
+                  "description": "Token dari link di email verifikasi"
+                }
+              ]
+            },
+            "description": "Verifikasi email dengan token dari email (salin ke variabel `verificationToken`). Dengan `Accept: application/json` responsnya JSON; browser (`Accept: text/html`) mendapat halaman HTML. Sukses **200**; sudah terverifikasi **409**; token invalid/kosong **400**; user tidak ada **404**.",
+            "auth": {
+              "type": "noauth"
+            }
+          }
+        },
+        {
+          "name": "Get Profile",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", function () { pm.response.to.have.status(200); });",
+                  "pm.test(\"Body JSON: success sesuai status\", function () {",
+                  "  var json = pm.response.json();",
+                  "  pm.expect(json.success).to.eql(pm.response.code < 400);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/profile",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "profile"
+              ]
+            },
+            "description": "Profil user yang sedang login (dibaca dari DB), termasuk `role`. Tanpa `password`. Tanpa token **401**."
+          }
+        },
+        {
+          "name": "Update Profile",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", function () { pm.response.to.have.status(200); });",
+                  "pm.test(\"Body JSON: success sesuai status\", function () {",
+                  "  var json = pm.response.json();",
+                  "  pm.expect(json.success).to.eql(pm.response.code < 400);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/profile",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "profile"
+              ]
+            },
+            "description": "Update parsial, minimal satu field dari `fullName` (maks 255), `phoneNumber` (`^\\+?\\d{7,15}$`, **409** bila dipakai user lain), `profilePicture` (string atau `null`). Tanpa field **422**.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"fullName\": \"Demo User Updated\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "⚠️ Delete Account",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", function () { pm.response.to.have.status(200); });",
+                  "pm.test(\"Body JSON: success sesuai status\", function () {",
+                  "  var json = pm.response.json();",
+                  "  pm.expect(json.success).to.eql(pm.response.code < 400);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/profile",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "profile"
+              ]
+            },
+            "description": "⚠️ **PERINGATAN, DESTRUKTIF:** menghapus **permanen** akun yang sedang login beserta datanya (cascade: kontak, laporan, media, pertemanan, notifikasi, sesi). Tidak bisa dibatalkan. Database cloud dipakai bersama; jalankan hanya dengan akun uji yang dibuat lewat Register, jangan dengan akun demo atau akun milik rekan. Akun ADMIN ditolak **403**."
+          }
+        },
+        {
+          "name": "Logout",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", function () { pm.response.to.have.status(200); });",
+                  "pm.test(\"Body JSON: success sesuai status\", function () {",
+                  "  var json = pm.response.json();",
+                  "  pm.expect(json.success).to.eql(pm.response.code < 400);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/logout",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "logout"
+              ]
+            },
+            "description": "Cabut refresh token milik user (idempoten, tetap **200** bila sudah tidak ada). `refreshToken` wajib (422 bila kosong). Setelah logout, panggil Login lagi.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refreshToken\": \"{{refreshToken}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Emergency Contacts",
+      "description": "CRUD kontak darurat user di `/api/emergency-contacts`. Semua butuh Bearer `{{accessToken}}`. Maks 5 kontak per user; `priority` 1-5 unik per user; `phoneNumber` unik per user.",
+      "item": [
+        {
+          "name": "Create Contact",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 201\", function () { pm.response.to.have.status(201); });",
+                  "pm.test(\"Body JSON: success sesuai status\", function () {",
+                  "  var json = pm.response.json();",
+                  "  pm.expect(json.success).to.eql(pm.response.code < 400);",
+                  "});",
+                  "if ([200,201].indexOf(pm.response.code) !== -1) {",
+                  "  var json = pm.response.json();",
+                  "  var value = json.data.id;",
+                  "  if (value) { pm.environment.set(\"contactId\", value); }",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/emergency-contacts",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "emergency-contacts"
+              ]
+            },
+            "description": "Tambah kontak. `contactName` wajib maks 255; `phoneNumber` `^\\+?\\d{7,15}$`; `priority` integer 1-5. Sukses **201** dan `id` disimpan ke `contactId`. Melebihi 5 kontak **400**; priority/phone bentrok **409**.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"contactName\": \"Kontak Contoh\",\n  \"phoneNumber\": \"081234567801\",\n  \"priority\": 1\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "List Contacts",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", function () { pm.response.to.have.status(200); });",
+                  "pm.test(\"Body JSON: success sesuai status\", function () {",
+                  "  var json = pm.response.json();",
+                  "  pm.expect(json.success).to.eql(pm.response.code < 400);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/emergency-contacts?page=1&limit=10",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "emergency-contacts"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1",
+                  "description": "Nomor halaman (default 1)"
+                },
+                {
+                  "key": "limit",
+                  "value": "10",
+                  "description": "Jumlah item per halaman (default 10, maks 50)"
+                }
+              ]
+            },
+            "description": "Daftar kontak user, diurut `priority` naik. Paginasi `page`/`limit` (respons memuat `meta`)."
+          }
+        },
+        {
+          "name": "Update Contact",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", function () { pm.response.to.have.status(200); });",
+                  "pm.test(\"Body JSON: success sesuai status\", function () {",
+                  "  var json = pm.response.json();",
+                  "  pm.expect(json.success).to.eql(pm.response.code < 400);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/emergency-contacts/{{contactId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "emergency-contacts",
+                "{{contactId}}"
+              ]
+            },
+            "description": "Update parsial (minimal satu dari `contactName`, `phoneNumber`, `priority`). Kontak milik user lain atau tidak ada **404**; bentrok **409**.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"contactName\": \"Kontak Contoh (diubah)\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Delete Contact",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", function () { pm.response.to.have.status(200); });",
+                  "pm.test(\"Body JSON: success sesuai status\", function () {",
+                  "  var json = pm.response.json();",
+                  "  pm.expect(json.success).to.eql(pm.response.code < 400);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/emergency-contacts/{{contactId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "emergency-contacts",
+                "{{contactId}}"
+              ]
+            },
+            "description": "Hapus kontak. Milik user lain atau tidak ada **404**."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Reports",
+      "description": "CRUD laporan insiden milik user di `/api/reports`. Semua butuh Bearer `{{accessToken}}`. Laporan milik user lain atau tidak ada selalu **404**.",
+      "item": [
+        {
+          "name": "Create Report",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 201\", function () { pm.response.to.have.status(201); });",
+                  "pm.test(\"Body JSON: success sesuai status\", function () {",
+                  "  var json = pm.response.json();",
+                  "  pm.expect(json.success).to.eql(pm.response.code < 400);",
+                  "});",
+                  "if ([200,201].indexOf(pm.response.code) !== -1) {",
+                  "  var json = pm.response.json();",
+                  "  var value = json.data.id;",
+                  "  if (value) { pm.environment.set(\"reportId\", value); }",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/reports",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "reports"
+              ]
+            },
+            "description": "Buat laporan. `category` salah satu: `CRIME, ACCIDENT, FIRE, MEDICAL, DISASTER, SUSPICIOUS, OTHER`; `title` wajib maks 255; `description` opsional; `latitude` -90..90 dan `longitude` -180..180 wajib. Sukses **201** dan `id` disimpan ke `reportId`.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"category\": \"ACCIDENT\",\n  \"title\": \"Laporan contoh\",\n  \"description\": \"Deskripsi contoh (opsional).\",\n  \"latitude\": -6.2088,\n  \"longitude\": 106.8456\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "List Reports",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", function () { pm.response.to.have.status(200); });",
+                  "pm.test(\"Body JSON: success sesuai status\", function () {",
+                  "  var json = pm.response.json();",
+                  "  pm.expect(json.success).to.eql(pm.response.code < 400);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/reports?page=1&limit=10",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "reports"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1",
+                  "description": "Nomor halaman (default 1)"
+                },
+                {
+                  "key": "limit",
+                  "value": "10",
+                  "description": "Jumlah item per halaman (default 10, maks 50)"
+                }
+              ]
+            },
+            "description": "Daftar laporan **milik user**, terbaru dulu. Paginasi `page`/`limit`."
+          }
+        },
+        {
+          "name": "Get Report",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", function () { pm.response.to.have.status(200); });",
+                  "pm.test(\"Body JSON: success sesuai status\", function () {",
+                  "  var json = pm.response.json();",
+                  "  pm.expect(json.success).to.eql(pm.response.code < 400);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/reports/{{reportId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "reports",
+                "{{reportId}}"
+              ]
+            },
+            "description": "Detail satu laporan. Koordinat dikembalikan sebagai number."
+          }
+        },
+        {
+          "name": "Update Report",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", function () { pm.response.to.have.status(200); });",
+                  "pm.test(\"Body JSON: success sesuai status\", function () {",
+                  "  var json = pm.response.json();",
+                  "  pm.expect(json.success).to.eql(pm.response.code < 400);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/reports/{{reportId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "reports",
+                "{{reportId}}"
+              ]
+            },
+            "description": "Update parsial, minimal satu dari `category`, `title`, `description` (string atau `null`), `latitude`, `longitude`.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Laporan contoh (diubah)\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "⚠️ Delete Report",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", function () { pm.response.to.have.status(200); });",
+                  "pm.test(\"Body JSON: success sesuai status\", function () {",
+                  "  var json = pm.response.json();",
+                  "  pm.expect(json.success).to.eql(pm.response.code < 400);",
+                  "});",
+                  "if (pm.response.code === 200) { pm.environment.set(\"reportId\", \"\"); }"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/reports/{{reportId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "reports",
+                "{{reportId}}"
+              ]
+            },
+            "description": "⚠️ **PERINGATAN, DESTRUKTIF:** menghapus **permanen** laporan `{{reportId}}` beserta semua medianya (cascade di database; file di Cloudinary tidak otomatis ikut terhapus). Pastikan `reportId` berisi laporan uji yang baru dibuat lewat Create Report, bukan laporan penting. Setelah sukses, variabel `reportId` dikosongkan."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Report Media",
+      "description": "Media laporan di `/api/reports/:reportId/media`. Semua butuh Bearer `{{accessToken}}`. Upload memakai `multipart/form-data` (field `file`), hanya `image/*` dan `video/*`, maks 20 MB (422 bila melanggar). File dikirim ke **Cloudinary**; gagal upload **502**.",
+      "item": [
+        {
+          "name": "Create Report (prasyarat media)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 201\", function () { pm.response.to.have.status(201); });",
+                  "pm.test(\"Body JSON: success sesuai status\", function () {",
+                  "  var json = pm.response.json();",
+                  "  pm.expect(json.success).to.eql(pm.response.code < 400);",
+                  "});",
+                  "if ([200,201].indexOf(pm.response.code) !== -1) {",
+                  "  var json = pm.response.json();",
+                  "  var value = json.data.id;",
+                  "  if (value) { pm.environment.set(\"reportId\", value); }",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/reports",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "reports"
+              ]
+            },
+            "description": "Membuat laporan baru (route yang sama dengan Create Report) agar folder ini bisa dijalankan sendiri. `id` disimpan ke `reportId`.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"category\": \"OTHER\",\n  \"title\": \"Laporan untuk uji media\",\n  \"latitude\": -6.2088,\n  \"longitude\": 106.8456\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Upload Media",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 201\", function () { pm.response.to.have.status(201); });",
+                  "pm.test(\"Body JSON: success sesuai status\", function () {",
+                  "  var json = pm.response.json();",
+                  "  pm.expect(json.success).to.eql(pm.response.code < 400);",
+                  "});",
+                  "if ([200,201].indexOf(pm.response.code) !== -1) {",
+                  "  var json = pm.response.json();",
+                  "  var value = json.data.id;",
+                  "  if (value) { pm.environment.set(\"mediaId\", value); }",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/reports/{{reportId}}/media",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "reports",
+                "{{reportId}}",
+                "media"
+              ]
+            },
+            "description": "Upload satu media. Pilih file di field `file` (tab Body -> form-data). `mediaType` (`IMAGE`/`VIDEO`) ditentukan otomatis dari MIME. Sukses **201** dan `id` disimpan ke `mediaId`. Tanpa file atau tipe salah **422**; laporan bukan milik user **404**.",
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": [],
+                  "description": "Pilih file gambar atau video (maks 20 MB)"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "List Media",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", function () { pm.response.to.have.status(200); });",
+                  "pm.test(\"Body JSON: success sesuai status\", function () {",
+                  "  var json = pm.response.json();",
+                  "  pm.expect(json.success).to.eql(pm.response.code < 400);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/reports/{{reportId}}/media?page=1&limit=10",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "reports",
+                "{{reportId}}",
+                "media"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1",
+                  "description": "Nomor halaman (default 1)"
+                },
+                {
+                  "key": "limit",
+                  "value": "10",
+                  "description": "Jumlah item per halaman (default 10, maks 50)"
+                }
+              ]
+            },
+            "description": "Daftar media laporan, terlama dulu. Paginasi `page`/`limit`."
+          }
+        },
+        {
+          "name": "⚠️ Delete Media",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", function () { pm.response.to.have.status(200); });",
+                  "pm.test(\"Body JSON: success sesuai status\", function () {",
+                  "  var json = pm.response.json();",
+                  "  pm.expect(json.success).to.eql(pm.response.code < 400);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/reports/{{reportId}}/media/{{mediaId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "reports",
+                "{{reportId}}",
+                "media",
+                "{{mediaId}}"
+              ]
+            },
+            "description": "⚠️ **PERINGATAN, DESTRUKTIF:** menghapus **permanen** satu media (baris database dan asset di Cloudinary, best-effort). Tidak bisa dibatalkan. Pastikan `mediaId` berasal dari Upload Media uji. Media tidak ada atau bukan milik laporan **404**."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Guides",
+      "description": "Panduan keselamatan di `/api/guides`. **Baca publik (tanpa auth); tulis hanya admin** (`{{adminAccessToken}}`; jalankan Auth -> Login Admin dulu). Non-admin **403**, tanpa token **401**.\n\nVariabel dipisah: **`guideId`** untuk membaca (List/Get Guide, bisa panduan seed) dan **`createdGuideId`** untuk menulis (Create/Update/Delete, hanya panduan buatan sendiri).",
+      "item": [
+        {
+          "name": "List Guides",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", function () { pm.response.to.have.status(200); });",
+                  "pm.test(\"Body JSON: success sesuai status\", function () {",
+                  "  var json = pm.response.json();",
+                  "  pm.expect(json.success).to.eql(pm.response.code < 400);",
+                  "});",
+                  "if ([200].indexOf(pm.response.code) !== -1) {",
+                  "  var json = pm.response.json();",
+                  "  var value = json.data && json.data[0] && json.data[0].id;",
+                  "  if (value) { pm.environment.set(\"guideId\", value); }",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/guides?page=1&limit=10",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "guides"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1",
+                  "description": "Nomor halaman (default 1)"
+                },
+                {
+                  "key": "limit",
+                  "value": "10",
+                  "description": "Jumlah item per halaman (default 10, maks 50)"
+                }
+              ]
+            },
+            "description": "Daftar panduan (publik), terbaru dulu. Paginasi `page`/`limit`. `id` panduan pertama disimpan ke `guideId` (dipakai Get Guide; **tidak** dipakai Update/Delete).",
+            "auth": {
+              "type": "noauth"
+            }
+          }
+        },
+        {
+          "name": "Get Guide",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", function () { pm.response.to.have.status(200); });",
+                  "pm.test(\"Body JSON: success sesuai status\", function () {",
+                  "  var json = pm.response.json();",
+                  "  pm.expect(json.success).to.eql(pm.response.code < 400);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/guides/{{guideId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "guides",
+                "{{guideId}}"
+              ]
+            },
+            "description": "Detail satu panduan (publik) berdasarkan `guideId` (diisi oleh List Guides). Isi `guideId` manual bila ingin melihat panduan lain. Tidak ada **404**.",
+            "auth": {
+              "type": "noauth"
+            }
+          }
+        },
+        {
+          "name": "Create Guide (admin)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 201\", function () { pm.response.to.have.status(201); });",
+                  "pm.test(\"Body JSON: success sesuai status\", function () {",
+                  "  var json = pm.response.json();",
+                  "  pm.expect(json.success).to.eql(pm.response.code < 400);",
+                  "});",
+                  "if ([200,201].indexOf(pm.response.code) !== -1) {",
+                  "  var json = pm.response.json();",
+                  "  var value = json.data.id;",
+                  "  if (value) { pm.environment.set(\"createdGuideId\", value); }",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/guides",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "guides"
+              ]
+            },
+            "description": "Buat panduan. `title` wajib maks 255; `category` salah satu `SAFETY, FIRST_AID, DISASTER, EMERGENCY, LEGAL`; `content` wajib; `thumbnail` opsional (string atau `null`). Sukses **201** dan `id` baru disimpan ke `createdGuideId` (bukan `guideId`), sehingga Update/Delete berikutnya hanya menyentuh panduan buatan ini, bukan data seed.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Panduan contoh\",\n  \"category\": \"SAFETY\",\n  \"content\": \"Isi panduan contoh.\",\n  \"thumbnail\": null\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{adminAccessToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Update Guide (admin)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", function () { pm.response.to.have.status(200); });",
+                  "pm.test(\"Body JSON: success sesuai status\", function () {",
+                  "  var json = pm.response.json();",
+                  "  pm.expect(json.success).to.eql(pm.response.code < 400);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/guides/{{createdGuideId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "guides",
+                "{{createdGuideId}}"
+              ]
+            },
+            "description": "Update parsial, minimal satu dari `title`, `category`, `content`, `thumbnail`. Hanya memakai `createdGuideId` (diisi Create Guide), jadi tidak menyentuh panduan seed. Bila `createdGuideId` kosong, request tidak mengenai panduan mana pun (404).",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Panduan contoh (diubah)\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{adminAccessToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "⚠️ Delete Guide (admin)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", function () { pm.response.to.have.status(200); });",
+                  "pm.test(\"Body JSON: success sesuai status\", function () {",
+                  "  var json = pm.response.json();",
+                  "  pm.expect(json.success).to.eql(pm.response.code < 400);",
+                  "});",
+                  "if (pm.response.code === 200) { pm.environment.set(\"createdGuideId\", \"\"); }"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/guides/{{createdGuideId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "guides",
+                "{{createdGuideId}}"
+              ]
+            },
+            "description": "⚠️ **PERINGATAN, DESTRUKTIF:** menghapus **permanen** panduan `{{createdGuideId}}`. Hanya memakai `createdGuideId` (panduan yang dibuat lewat Create Guide), bukan `guideId`, supaya panduan seed tidak ikut terhapus. Database cloud dipakai bersama: periksa isi `createdGuideId` sebelum menekan Send. Setelah sukses, `createdGuideId` dikosongkan.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{adminAccessToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Friendships",
+      "description": "Pertemanan di `/api/friendships`. Semua butuh Bearer `{{accessToken}}`. Alur uji butuh **dua akun**: akun A (requester) mengirim permintaan ke akun B; **accept/reject harus dijalankan dengan token akun B (addressee)**. Isi `targetUserId` dengan id akun B (lihat Users -> Search Users).",
+      "item": [
+        {
+          "name": "Send Friend Request",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 201\", function () { pm.response.to.have.status(201); });",
+                  "pm.test(\"Body JSON: success sesuai status\", function () {",
+                  "  var json = pm.response.json();",
+                  "  pm.expect(json.success).to.eql(pm.response.code < 400);",
+                  "});",
+                  "if ([200,201].indexOf(pm.response.code) !== -1) {",
+                  "  var json = pm.response.json();",
+                  "  var value = json.data.id;",
+                  "  if (value) { pm.environment.set(\"friendshipId\", value); }",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/friendships/request",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "friendships",
+                "request"
+              ]
+            },
+            "description": "Kirim permintaan pertemanan ke `addresseeId` (id user target). Sukses **201** dan `id` disimpan ke `friendshipId`. Diri sendiri **400**; target tidak ada **404**; sudah berteman/menunggu **409**.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"addresseeId\": \"{{targetUserId}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "List Friends",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", function () { pm.response.to.have.status(200); });",
+                  "pm.test(\"Body JSON: success sesuai status\", function () {",
+                  "  var json = pm.response.json();",
+                  "  pm.expect(json.success).to.eql(pm.response.code < 400);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/friendships?page=1&limit=10",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "friendships"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1",
+                  "description": "Nomor halaman (default 1)"
+                },
+                {
+                  "key": "limit",
+                  "value": "10",
+                  "description": "Jumlah item per halaman (default 10, maks 50)"
+                }
+              ]
+            },
+            "description": "Daftar teman (status `ACCEPTED`), paginasi `page`/`limit`."
+          }
+        },
+        {
+          "name": "List Incoming Requests",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", function () { pm.response.to.have.status(200); });",
+                  "pm.test(\"Body JSON: success sesuai status\", function () {",
+                  "  var json = pm.response.json();",
+                  "  pm.expect(json.success).to.eql(pm.response.code < 400);",
+                  "});",
+                  "if ([200].indexOf(pm.response.code) !== -1) {",
+                  "  var json = pm.response.json();",
+                  "  var value = json.data && json.data[0] && json.data[0].id;",
+                  "  if (value) { pm.environment.set(\"friendshipId\", value); }",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/friendships/requests?page=1&limit=10",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "friendships",
+                "requests"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1",
+                  "description": "Nomor halaman (default 1)"
+                },
+                {
+                  "key": "limit",
+                  "value": "10",
+                  "description": "Jumlah item per halaman (default 10, maks 50)"
+                }
+              ]
+            },
+            "description": "Daftar permintaan masuk (`PENDING`) untuk user yang login, paginasi `page`/`limit`. Bila dijalankan sebagai akun B, `id` permintaan pertama disimpan ke `friendshipId`."
+          }
+        },
+        {
+          "name": "Accept Friend Request",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200 atau 404 atau 409\", function () { pm.expect([200, 404, 409]).to.include(pm.response.code); });",
+                  "pm.test(\"Body JSON: success sesuai status\", function () {",
+                  "  var json = pm.response.json();",
+                  "  pm.expect(json.success).to.eql(pm.response.code < 400);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/friendships/{{friendshipId}}/accept",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "friendships",
+                "{{friendshipId}}",
+                "accept"
+              ]
+            },
+            "description": "Terima permintaan. **Hanya addressee** (akun B). Sukses **200**; bukan addressee atau tidak ada **404**; bukan `PENDING` lagi **409**. Test menerima 200/404/409 karena hasilnya bergantung pada akun yang dipakai."
+          }
+        },
+        {
+          "name": "Reject Friend Request",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200 atau 404 atau 409\", function () { pm.expect([200, 404, 409]).to.include(pm.response.code); });",
+                  "pm.test(\"Body JSON: success sesuai status\", function () {",
+                  "  var json = pm.response.json();",
+                  "  pm.expect(json.success).to.eql(pm.response.code < 400);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/friendships/{{friendshipId}}/reject",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "friendships",
+                "{{friendshipId}}",
+                "reject"
+              ]
+            },
+            "description": "Tolak permintaan. **Hanya addressee**. Sukses **200**; bukan addressee atau tidak ada **404**; bukan `PENDING` lagi **409**."
+          }
+        },
+        {
+          "name": "Remove Friendship",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200 atau 404\", function () { pm.expect([200, 404]).to.include(pm.response.code); });",
+                  "pm.test(\"Body JSON: success sesuai status\", function () {",
+                  "  var json = pm.response.json();",
+                  "  pm.expect(json.success).to.eql(pm.response.code < 400);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/friendships/{{friendshipId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "friendships",
+                "{{friendshipId}}"
+              ]
+            },
+            "description": "Hapus (unfriend) pertemanan `ACCEPTED` yang melibatkan user. Tidak ada, bukan `ACCEPTED`, atau tidak melibatkan user **404**."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Notifications",
+      "description": "Notifikasi in-app di `/api/notifications`. Semua butuh Bearer `{{accessToken}}`. Notifikasi dibuat otomatis oleh event (pertemanan, sesi berbagi), bukan lewat endpoint create.",
+      "item": [
+        {
+          "name": "List Notifications",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", function () { pm.response.to.have.status(200); });",
+                  "pm.test(\"Body JSON: success sesuai status\", function () {",
+                  "  var json = pm.response.json();",
+                  "  pm.expect(json.success).to.eql(pm.response.code < 400);",
+                  "});",
+                  "if ([200].indexOf(pm.response.code) !== -1) {",
+                  "  var json = pm.response.json();",
+                  "  var value = json.data && json.data[0] && json.data[0].id;",
+                  "  if (value) { pm.environment.set(\"notificationId\", value); }",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/notifications?page=1&limit=10",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "notifications"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1",
+                  "description": "Nomor halaman (default 1)"
+                },
+                {
+                  "key": "limit",
+                  "value": "10",
+                  "description": "Jumlah item per halaman (default 10, maks 50)"
+                }
+              ]
+            },
+            "description": "Daftar notifikasi user, terbaru dulu (memuat preview `sender`). Paginasi `page`/`limit`. `id` notifikasi pertama (bila ada) disimpan ke `notificationId`."
+          }
+        },
+        {
+          "name": "Unread Count",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", function () { pm.response.to.have.status(200); });",
+                  "pm.test(\"Body JSON: success sesuai status\", function () {",
+                  "  var json = pm.response.json();",
+                  "  pm.expect(json.success).to.eql(pm.response.code < 400);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/notifications/unread-count",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "notifications",
+                "unread-count"
+              ]
+            },
+            "description": "Jumlah notifikasi belum dibaca: `data = { count }`. Cocok untuk polling."
+          }
+        },
+        {
+          "name": "Mark All Read",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", function () { pm.response.to.have.status(200); });",
+                  "pm.test(\"Body JSON: success sesuai status\", function () {",
+                  "  var json = pm.response.json();",
+                  "  pm.expect(json.success).to.eql(pm.response.code < 400);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/notifications/read-all",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "notifications",
+                "read-all"
+              ]
+            },
+            "description": "Tandai semua notifikasi sebagai dibaca: `data = { updated }`."
+          }
+        },
+        {
+          "name": "Mark Read",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200 atau 404\", function () { pm.expect([200, 404]).to.include(pm.response.code); });",
+                  "pm.test(\"Body JSON: success sesuai status\", function () {",
+                  "  var json = pm.response.json();",
+                  "  pm.expect(json.success).to.eql(pm.response.code < 400);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/notifications/{{notificationId}}/read",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "notifications",
+                "{{notificationId}}",
+                "read"
+              ]
+            },
+            "description": "Tandai satu notifikasi sebagai dibaca (idempoten). Tidak ada atau milik user lain **404** (test menerima 404 bila belum ada notifikasi)."
+          }
+        },
+        {
+          "name": "Delete Notification",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200 atau 404\", function () { pm.expect([200, 404]).to.include(pm.response.code); });",
+                  "pm.test(\"Body JSON: success sesuai status\", function () {",
+                  "  var json = pm.response.json();",
+                  "  pm.expect(json.success).to.eql(pm.response.code < 400);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/notifications/{{notificationId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "notifications",
+                "{{notificationId}}"
+              ]
+            },
+            "description": "Hapus satu notifikasi. Tidak ada atau milik user lain **404**."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Sharing Sessions",
+      "description": "Sesi berbagi lokasi di `/api/sharing-sessions`. Semua butuh Bearer `{{accessToken}}`. Satu sesi = satu baris per teman (`ACCEPTED`) dengan `startedAt` sama.",
+      "item": [
+        {
+          "name": "Start Sharing Session",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 201\", function () { pm.response.to.have.status(201); });",
+                  "pm.test(\"Body JSON: success sesuai status\", function () {",
+                  "  var json = pm.response.json();",
+                  "  pm.expect(json.success).to.eql(pm.response.code < 400);",
+                  "});",
+                  "if ([201].indexOf(pm.response.code) !== -1) {",
+                  "  var json = pm.response.json();",
+                  "  var value = json.data && json.data[0] && json.data[0].id;",
+                  "  if (value) { pm.environment.set(\"sessionId\", value); }",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/sharing-sessions",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "sharing-sessions"
+              ]
+            },
+            "description": "Mulai sesi ke semua teman `ACCEPTED`. Body boleh `{}` (harus objek JSON, selain itu **422**). Sukses **201**: `data` = array baris sesi; `id` baris pertama disimpan ke `sessionId`. Sudah punya sesi aktif **409**; belum punya teman `ACCEPTED` **400**.",
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "List Active Sessions",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", function () { pm.response.to.have.status(200); });",
+                  "pm.test(\"Body JSON: success sesuai status\", function () {",
+                  "  var json = pm.response.json();",
+                  "  pm.expect(json.success).to.eql(pm.response.code < 400);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/sharing-sessions/active?page=1&limit=10",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "sharing-sessions",
+                "active"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1",
+                  "description": "Nomor halaman (default 1)"
+                },
+                {
+                  "key": "limit",
+                  "value": "10",
+                  "description": "Jumlah item per halaman (default 10, maks 50)"
+                }
+              ]
+            },
+            "description": "Sesi aktif di mana user adalah owner atau viewer. Paginasi `page`/`limit`."
+          }
+        },
+        {
+          "name": "Get Session",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", function () { pm.response.to.have.status(200); });",
+                  "pm.test(\"Body JSON: success sesuai status\", function () {",
+                  "  var json = pm.response.json();",
+                  "  pm.expect(json.success).to.eql(pm.response.code < 400);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/sharing-sessions/{{sessionId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "sharing-sessions",
+                "{{sessionId}}"
+              ]
+            },
+            "description": "Detail satu baris sesi (hanya owner atau viewer-nya). Bukan owner/viewer atau tidak ada **404**."
+          }
+        },
+        {
+          "name": "Stop Session",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", function () { pm.response.to.have.status(200); });",
+                  "pm.test(\"Body JSON: success sesuai status\", function () {",
+                  "  var json = pm.response.json();",
+                  "  pm.expect(json.success).to.eql(pm.response.code < 400);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/sharing-sessions/{{sessionId}}/stop",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "sharing-sessions",
+                "{{sessionId}}",
+                "stop"
+              ]
+            },
+            "description": "Hentikan sesi (hanya owner); seluruh grup sesi dinonaktifkan. Bukan owner atau tidak ada **404**; sudah berhenti **409**."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Users",
+      "description": "Utilitas user di `/api/users`. Semua butuh Bearer `{{accessToken}}`. Hanya field publik yang dikembalikan.",
+      "item": [
+        {
+          "name": "Search Users",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", function () { pm.response.to.have.status(200); });",
+                  "pm.test(\"Body JSON: success sesuai status\", function () {",
+                  "  var json = pm.response.json();",
+                  "  pm.expect(json.success).to.eql(pm.response.code < 400);",
+                  "});",
+                  "if ([200].indexOf(pm.response.code) !== -1) {",
+                  "  var json = pm.response.json();",
+                  "  var value = json.data && json.data[0] && json.data[0].id;",
+                  "  if (value) { pm.environment.set(\"targetUserId\", value); }",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/users/search?q=demo&page=1&limit=10",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "users",
+                "search"
+              ],
+              "query": [
+                {
+                  "key": "q",
+                  "value": "demo",
+                  "description": "Kata kunci username/nama (wajib)"
+                },
+                {
+                  "key": "page",
+                  "value": "1",
+                  "description": "Nomor halaman (default 1)"
+                },
+                {
+                  "key": "limit",
+                  "value": "10",
+                  "description": "Jumlah item per halaman (default 10, maks 50)"
+                }
+              ]
+            },
+            "description": "Cari user berdasarkan `username`/`fullName` (case-insensitive), kecuali diri sendiri. `q` wajib (kosong **422**). Paginasi `page`/`limit`. `id` hasil pertama disimpan ke `targetUserId`."
+          }
+        },
+        {
+          "name": "Get User",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", function () { pm.response.to.have.status(200); });",
+                  "pm.test(\"Body JSON: success sesuai status\", function () {",
+                  "  var json = pm.response.json();",
+                  "  pm.expect(json.success).to.eql(pm.response.code < 400);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/users/{{targetUserId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "users",
+                "{{targetUserId}}"
+              ]
+            },
+            "description": "Profil publik + `friendshipStatus` (`FRIENDS`, `PENDING_SENT`, `PENDING_RECEIVED`, `NONE`). User tidak ada **404**."
+          }
+        },
+        {
+          "name": "List User Friends",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", function () { pm.response.to.have.status(200); });",
+                  "pm.test(\"Body JSON: success sesuai status\", function () {",
+                  "  var json = pm.response.json();",
+                  "  pm.expect(json.success).to.eql(pm.response.code < 400);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/users/{{targetUserId}}/friends?page=1&limit=10",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "users",
+                "{{targetUserId}}",
+                "friends"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1",
+                  "description": "Nomor halaman (default 1)"
+                },
+                {
+                  "key": "limit",
+                  "value": "10",
+                  "description": "Jumlah item per halaman (default 10, maks 50)"
+                }
+              ]
+            },
+            "description": "Daftar teman `ACCEPTED` milik user tersebut. Paginasi `page`/`limit`. User tidak ada **404**."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Halaman Browser (HTML)",
+      "description": "Halaman HTML yang dibuka dari link email. Ada di root (**bukan** di bawah `/api`). Respons berupa HTML, bukan JSON.",
+      "item": [
+        {
+          "name": "Reset Password Page",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", function () { pm.response.to.have.status(200); });",
+                  "pm.test(\"Content-Type HTML\", function () { pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"text/html\"); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/reset-password?token={{resetToken}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "reset-password"
+              ],
+              "query": [
+                {
+                  "key": "token",
+                  "value": "{{resetToken}}",
+                  "description": "Token reset dari email (opsional untuk uji tampilan)"
+                }
+              ]
+            },
+            "description": "`GET /reset-password?token=...` -> halaman HTML berisi form password baru (menembak `POST /api/auth/reset-password`). Token tidak dicek saat halaman dibuka. Tanpa `token` halaman menampilkan pesan link tidak valid. Lebih mudah dilihat lewat browser (Send -> Preview).",
+            "auth": {
+              "type": "noauth"
+            }
+          }
+        },
+        {
+          "name": "Verify Email (tampilan HTML)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200 atau 400 atau 409\", function () { pm.expect([200, 400, 409]).to.include(pm.response.code); });",
+                  "pm.test(\"Content-Type HTML\", function () { pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"text/html\"); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "text/html",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/verify-email?token={{verificationToken}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "verify-email"
+              ],
+              "query": [
+                {
+                  "key": "token",
+                  "value": "{{verificationToken}}",
+                  "description": "Token dari link di email verifikasi"
+                }
+              ]
+            },
+            "description": "Route yang sama dengan Auth -> Verify Email, tetapi dengan `Accept: text/html` sehingga merespons halaman HTML (seperti saat link email dibuka di browser). Status code sama: 200 / 409 / 400.",
+            "auth": {
+              "type": "noauth"
+            }
+          }
+        }
+      ]
+    }
+  ]
+}
