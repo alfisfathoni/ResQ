@@ -86,7 +86,7 @@ backend/
 │   ├── services/             # logika bisnis
 │   ├── utils/                # jwt, hash, mailer, cloudinary, response, service-error, async-handler
 │   └── validations/          # validasi input per fitur
-├── uploads/                  # penyimpanan sementara upload (ada .gitkeep)
+├── uploads/                  # tidak dipakai kode (hanya .gitkeep); upload memakai Multer memoryStorage, tanpa disk
 ├── .env.example              # daftar nama variabel lingkungan (tanpa nilai rahasia)
 ├── .env                      # variabel lingkungan (JANGAN di-commit)
 └── package.json
