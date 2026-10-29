@@ -46,6 +46,7 @@ Route  ->  Middleware  ->  Controller  ->  Service  ->  Prisma  ->  Database
   - `jwt.js` — sign/verify 4 jenis token: access, refresh, email-verification, password-reset. Keempat secret wajib ada di env (tanpa fallback).
   - `mailer.js` — Nodemailer (transport lazy) + template email verifikasi & reset.
   - `cloudinary.js` — upload buffer, delete asset, derive `public_id` dari URL.
+  - `phone.js` — `normalizePhone()` (`08…`/`628…`/`+628…` → `+628…`) dan `phoneVariants()`; dipakai SOS untuk mencocokkan kontak darurat dengan pengguna terdaftar.
   - `service-error.js` — kelas **`ServiceError` bersama** dipakai seluruh service.
   - `async-handler.js` — **`asyncHandler`** pembungkus handler async agar error diteruskan ke global error handler.
 - **Config** (`src/config/`):
@@ -54,7 +55,7 @@ Route  ->  Middleware  ->  Controller  ->  Service  ->  Prisma  ->  Database
 
 ### Middleware
 - `request-logger.middleware.js` — logging `morgan` dengan token kustom `safe-url` dan `safe-referrer` yang mengganti nilai parameter `token` menjadi `[REDACTED]` (format `dev` dan produksi).
-- `rate-limit.middleware.js` — `authLimiter`, `emailLimiter`, `refreshLimiter`; batasnya dapat diatur lewat env (lihat "Variabel Lingkungan").
+- `rate-limit.middleware.js` — `authLimiter`, `emailLimiter`, `refreshLimiter` (batasnya dapat diatur lewat env, lihat "Variabel Lingkungan") dan `sosLimiter` (5 request / menit per user untuk `POST /api/sos`, tidak dapat diatur lewat env).
 - `auth.middleware.js` — verifikasi `Authorization: Bearer <token>`, isi `req.user = { id, role }`; gagal → 401.
 - `upload.middleware.js` — multer memory storage, limit 20MB, hanya `image/*` & `video/*`.
 - `role.middleware.js` — `authorize(...roles)` **sudah diimplementasikan** (cek `req.user.role`; tanpa identitas → 401, role tak diizinkan → 403) + guard `isAdmin` untuk route admin.
@@ -80,9 +81,9 @@ backend/
 │   ├── app.js                # Setup Express app + registrasi route
 │   ├── server.js             # Entry point: start server + koneksi DB
 │   ├── config/               # prisma.js, db.js, env.js (validasi env saat start)
-│   ├── controllers/          # auth, emergency-contact, report, report-media, guide, friendship, notification, sharing-session, user
+│   ├── controllers/          # auth, emergency-contact, report, report-media, guide, friendship, notification, sharing-session, user, sos
 │   ├── middleware/           # auth, role, upload, error
-│   ├── routes/               # definisi endpoint (9 router)
+│   ├── routes/               # definisi endpoint (10 router)
 │   ├── services/             # logika bisnis
 │   ├── utils/                # jwt, hash, mailer, cloudinary, response, service-error, async-handler
 │   └── validations/          # validasi input per fitur
@@ -105,7 +106,7 @@ backend/
 | `Notification` | Notifikasi ke pengguna | Dipakai penuh (dibuat via event bisnis) |
 | `Friendship` | Relasi pertemanan (PENDING/ACCEPTED/REJECTED) | Dipakai penuh |
 | `SharingSession` | Sesi berbagi lokasi owner -> viewer (kolom baru `expiresAt` dan tujuan perjalanan sudah ada di skema, belum dipakai API) | Dipakai penuh |
-| `SosAlert` | Peringatan SOS (kategori, status, lokasi) milik user | Disiapkan, API belum ada |
+| `SosAlert` | Peringatan SOS (kategori, status, lokasi) milik user | Dipakai penuh (`/api/sos`; satu SOS `ACTIVE` per user ditegakkan di service) |
 | `Facility` | Fasilitas publik (polisi, rumah sakit, halte, dll.) dengan koordinat | Disiapkan, API belum ada |
 | `ReportLike` | Like pada laporan insiden (unik per laporan + user) | Disiapkan, API belum ada |
 | `ReportComment` | Komentar pada laporan insiden | Disiapkan, API belum ada |

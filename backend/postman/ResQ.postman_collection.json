@@ -1,6 +1,6 @@
 {
   "info": {
-    "_postman_id": "ebbd54bf-a5ba-4150-b9d7-f3eabd540291",
+    "_postman_id": "20a9f5bd-5f41-4b9b-920b-5d95cb62e851",
     "name": "ResQ Backend API",
     "description": "Collection untuk backend ResQ (Express + Prisma). Rujukan lengkap: `docs/API_REFERENCE.md`.\n\n**Cara pakai**\n1. Import collection ini dan `ResQ.postman_environment.json`, lalu pilih environment **ResQ Local** di pojok kanan atas.\n2. Isi variabel `email` dan `password` (akun uji milik Anda), jalankan **Auth -> Register**, buka link verifikasi di email, lalu **Auth -> Login**. Token tersimpan otomatis.\n3. Untuk request admin, isi `adminEmail` dan `adminPassword` (akun hasil seed) lalu jalankan **Auth -> Login Admin**.\n\n**Base URL**\n- `baseUrl` default `http://localhost:3000`.\n- Setelah backend di-deploy, ganti nilainya dengan URL deploy (HTTPS, tanpa garis miring di akhir).\n- Emulator Android memakai `http://10.0.2.2:3000` untuk mengakses backend di laptop.\n\n**Auth:** Bearer `{{accessToken}}` diatur di level collection. Request publik memakai No Auth; request admin memakai `{{adminAccessToken}}`.\n\n**Perhatian:** database cloud dipakai bersama. Jangan menyimpan kredensial nyata di file ini; isi nilai hanya di environment lokal. Request bertanda ⚠️ (Delete Account, Delete Report, Delete Media, Delete Guide) bersifat destruktif dan permanen.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
@@ -2286,6 +2286,252 @@
               ]
             },
             "description": "Daftar teman `ACCEPTED` milik user tersebut. Paginasi `page`/`limit`. User tidak ada **404**."
+          }
+        }
+      ]
+    },
+    {
+      "name": "SOS",
+      "description": "Peringatan SOS di `/api/sos`. Semua butuh Bearer `{{accessToken}}`. **Trigger SOS bersifat idempoten:** bila user sudah punya SOS `ACTIVE`, request yang sama memperbarui lokasi SOS itu (200), bukan membuat baru (201).\n\n⚠️ **Trigger SOS mengirim notifikasi `SOS_ALERT` ke teman `ACCEPTED` dan ke pengguna terdaftar yang nomornya cocok dengan kontak darurat Anda.** Gunakan akun uji, dan akhiri SOS uji dengan Resolve SOS.",
+      "item": [
+        {
+          "name": "Trigger SOS",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200 atau 201\", function () { pm.expect([200, 201]).to.include(pm.response.code); });",
+                  "pm.test(\"Body JSON: success sesuai status\", function () {",
+                  "  var json = pm.response.json();",
+                  "  pm.expect(json.success).to.eql(pm.response.code < 400);",
+                  "});",
+                  "if ([200, 201].indexOf(pm.response.code) !== -1) {",
+                  "  var json = pm.response.json();",
+                  "  if (json.data && json.data.alert) { pm.environment.set(\"sosId\", json.data.alert.id); }",
+                  "  pm.test(\"data memuat alert, emergencyContacts, shareText\", function () {",
+                  "    pm.expect(json.data).to.have.property(\"alert\");",
+                  "    pm.expect(json.data).to.have.property(\"emergencyContacts\");",
+                  "    pm.expect(json.data.shareText).to.be.a(\"string\");",
+                  "  });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/sos",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "sos"
+              ]
+            },
+            "description": "⚠️ Memicu SOS dan **mengirim notifikasi ke teman dan kontak darurat yang terdaftar** (hanya saat SOS baru atau kategori berubah). `category` salah satu `POLICE, MEDICAL, FIRE`; `latitude` -90..90 dan `longitude` -180..180 wajib; `message` opsional (string atau `null`, maks 500).\n\nSukses **201** (SOS baru) atau **200** (SOS aktif diperbarui). `data = { alert, emergencyContacts, shareText }`; `alert.id` disimpan ke `sosId`. Validasi gagal **422**. Rate limit **5 request / menit per user** (429).",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"category\": \"MEDICAL\",\n  \"latitude\": -6.2088,\n  \"longitude\": 106.8456,\n  \"message\": \"Pesan opsional (maks 500 karakter).\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Get Active SOS",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", function () { pm.response.to.have.status(200); });",
+                  "pm.test(\"Body JSON: success sesuai status\", function () {",
+                  "  var json = pm.response.json();",
+                  "  pm.expect(json.success).to.eql(pm.response.code < 400);",
+                  "});",
+                  "if (pm.response.code === 200) {",
+                  "  var json = pm.response.json();",
+                  "  if (json.data && json.data.id) { pm.environment.set(\"sosId\", json.data.id); }",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/sos/active",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "sos",
+                "active"
+              ]
+            },
+            "description": "SOS aktif milik user, atau `data: null` bila tidak ada. Bila ada, `id`-nya disimpan ke `sosId`."
+          }
+        },
+        {
+          "name": "List SOS History",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", function () { pm.response.to.have.status(200); });",
+                  "pm.test(\"Body JSON: success sesuai status\", function () {",
+                  "  var json = pm.response.json();",
+                  "  pm.expect(json.success).to.eql(pm.response.code < 400);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/sos?page=1&limit=10",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "sos"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1",
+                  "description": "Nomor halaman (default 1)"
+                },
+                {
+                  "key": "limit",
+                  "value": "10",
+                  "description": "Jumlah item per halaman (default 10, maks 50)"
+                }
+              ]
+            },
+            "description": "Riwayat SOS user, terbaru dulu. Paginasi `page`/`limit` (respons memuat `meta`)."
+          }
+        },
+        {
+          "name": "Resolve SOS",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200 atau 409\", function () { pm.expect([200, 409]).to.include(pm.response.code); });",
+                  "pm.test(\"Body JSON: success sesuai status\", function () {",
+                  "  var json = pm.response.json();",
+                  "  pm.expect(json.success).to.eql(pm.response.code < 400);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/sos/{{sosId}}/resolve",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "sos",
+                "{{sosId}}",
+                "resolve"
+              ]
+            },
+            "description": "Akhiri SOS aktif sebagai `RESOLVED` (situasi selesai). Hanya pemilik; SOS tidak ada atau milik user lain **404**; SOS yang sudah tidak `ACTIVE` **409** (test menerima 200 atau 409). `status` wajib: `RESOLVED` atau `CANCELLED`, selain itu **422**.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"RESOLVED\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Cancel SOS (salah tekan)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200 atau 409\", function () { pm.expect([200, 409]).to.include(pm.response.code); });",
+                  "pm.test(\"Body JSON: success sesuai status\", function () {",
+                  "  var json = pm.response.json();",
+                  "  pm.expect(json.success).to.eql(pm.response.code < 400);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/sos/{{sosId}}/resolve",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "sos",
+                "{{sosId}}",
+                "resolve"
+              ]
+            },
+            "description": "Route yang sama dengan Resolve SOS, tetapi dengan `status: CANCELLED` untuk SOS yang tertekan tanpa sengaja. Riwayat tetap tersimpan (tidak dihapus). Sudah tidak `ACTIVE` **409**.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"CANCELLED\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
           }
         }
       ]

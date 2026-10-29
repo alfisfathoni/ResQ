@@ -329,7 +329,82 @@ Aturan:
 
 ---
 
+## SOS — `/api/sos` (semua butuh auth)
+
+Peringatan darurat (tombol SOS). Satu user hanya punya **satu SOS `ACTIVE`** pada satu waktu.
+
+| Method | Path | Status sukses | Keterangan |
+| --- | --- | --- | --- |
+| POST | `/` | 201 (SOS baru) / 200 (SOS aktif diperbarui) | Memicu SOS (idempoten) |
+| GET | `/active` | 200 | SOS aktif milik user, atau `data: null` bila tidak ada |
+| GET | `/` | 200 | Riwayat SOS user, terbaru dulu (paginasi: `page`, `limit`) |
+| PATCH | `/:id/resolve` | 200 | Akhiri SOS aktif (`RESOLVED` atau `CANCELLED`) |
+
+### POST `/` — memicu SOS
+Payload & validasi:
+- `category` — wajib, salah satu `POLICE`, `MEDICAL`, `FIRE`.
+- `latitude` — wajib, angka atau string numerik, -90..90.
+- `longitude` — wajib, angka atau string numerik, -180..180.
+- `message` — opsional, string atau `null`, maks 500 karakter (string kosong disimpan sebagai `null`).
+- Validasi gagal: **422**. Koordinat dikembalikan sebagai **number**.
+
+Aturan idempoten:
+- **Belum ada SOS `ACTIVE`:** dibuat SOS baru (`status = ACTIVE`), respons **201**, dan notifikasi dikirim.
+- **Sudah ada SOS `ACTIVE`:** SOS itu diperbarui (bukan dibuat baru), respons **200**. `latitude` dan `longitude` selalu diperbarui; `category` mengikuti request; `message` hanya berubah bila field dikirim. Notifikasi **tidak** dikirim ulang untuk pembaruan lokasi biasa; notifikasi baru dikirim hanya bila `category` berubah.
+- Dua request hampir bersamaan dari user yang sama diserialkan di server (kunci per user), sehingga tidak terbentuk dua SOS aktif.
+
+Rate limit khusus: maks **5 request per menit per user** (berdasarkan user, bukan IP); lebih dari itu **429**. Batas ini juga berlaku untuk pembaruan lokasi lewat `POST /api/sos`.
+
+Efek samping (notifikasi `SOS_ALERT`, best-effort; kegagalan tidak menggagalkan SOS):
+- Penerima: semua teman berstatus `ACCEPTED`, ditambah pengguna terdaftar yang `phoneNumber`-nya cocok dengan salah satu kontak darurat pengirim **dan** berakun terverifikasi (`isVerified = true`) dengan role `USER`. Penerima tidak duplikat dan **tidak termasuk pengirim**. Pencocokan lewat nomor tidak mengirim ke akun yang belum terverifikasi atau berole `ADMIN`, karena nomor telepon belum diverifikasi (lihat `PROGRESS.md`).
+- Pencocokan nomor melalui normalisasi (`08…`, `628…`, dan `+628…` dianggap sama; lihat `utils/phone.js`).
+- Judul `Peringatan SOS: <label>`; isi memuat nama pengirim, label kategori, tautan peta, dan `message` bila ada. `senderId` = pengirim.
+
+Contoh respons sukses:
+```json
+{
+  "status": "success",
+  "success": true,
+  "message": "SOS alert triggered successfully.",
+  "data": {
+    "alert": {
+      "id": "...", "category": "MEDICAL", "status": "ACTIVE",
+      "latitude": -6.2088, "longitude": 106.8456, "message": null,
+      "createdAt": "2026-10-30T03:00:00.000Z", "resolvedAt": null
+    },
+    "emergencyContacts": [
+      { "contactName": "...", "phoneNumber": "...", "priority": 1 }
+    ],
+    "shareText": "SOS ResQ: <nama> membutuhkan bantuan (Medis). Lokasi: https://maps.google.com/?q=-6.2088,106.8456"
+  }
+}
+```
+- `emergencyContacts`: kontak milik pengirim, urut `priority` naik. Dipakai FE bersama `shareText` untuk membuka intent SMS/WhatsApp ke kontak yang belum terdaftar.
+- Label kategori di `shareText` dan notifikasi: `POLICE` = "Kejahatan/Pelecehan", `MEDICAL` = "Medis", `FIRE` = "Kebakaran". Bila `message` ada, `shareText` diakhiri ` Pesan: <message>`.
+- Pesan sukses: `"SOS alert triggered successfully."` (201) atau `"Active SOS alert updated successfully."` (200).
+
+### Panduan untuk FE
+- **Kirim SOS sekali saat tombol ditekan.** Simpan `data.alert.id` dari respons untuk resolve/cancel nanti.
+- **Pemanggilan ulang saat SOS masih aktif hanya memperbarui SOS yang sama** (lokasi, kategori, dan `message` bila dikirim), dengan respons **200**. Pemanggilan ulang dibatasi maks **5 per menit per user**; lebih dari itu **429**.
+- **Jangan memakai `POST /api/sos` untuk pembaruan lokasi berkala** (mis. tiap 5-10 detik): batas 5 per menit akan terlampaui. Gunakan POST ulang hanya untuk koreksi sesekali, misalnya mengganti kategori atau menambah pesan.
+- **Lokasi berkelanjutan memakai sesi berbagi lokasi** (`/api/sharing-sessions`), bukan SOS. SOS adalah peringatan sekali kirim dengan lokasi saat itu.
+- Setelah bantuan datang atau SOS tertekan tanpa sengaja, panggil `PATCH /api/sos/:id/resolve` (`RESOLVED` atau `CANCELLED`). Cek SOS yang masih aktif (mis. setelah aplikasi dibuka ulang) dengan `GET /api/sos/active`.
+- Notifikasi in-app hanya menjangkau teman `ACCEPTED` dan kontak darurat yang akunnya terdaftar dan terverifikasi. Untuk kontak lain, kirim `data.shareText` lewat intent SMS/WhatsApp ke nomor di `data.emergencyContacts`.
+
+### GET `/active`
+- **200**, `data` = objek SOS aktif (`id, category, status, latitude, longitude, message, createdAt, resolvedAt`), atau `null` bila tidak ada.
+
+### GET `/`
+- **200**, `data` = array SOS milik user (semua status), terbaru dulu, dengan `meta` paginasi. Tiap item berbentuk sama dengan `alert` di atas.
+
+### PATCH `/:id/resolve`
+- `status` — wajib, hanya `RESOLVED` (selesai) atau `CANCELLED` (salah tekan); selain itu **422**.
+- Sukses: **200**, `data` = SOS yang diperbarui (`status` baru dan `resolvedAt` terisi).
+- SOS tidak ada **atau** milik user lain: **404** (sama, tidak membocorkan keberadaan). SOS yang sudah tidak `ACTIVE`: **409**.
+
+---
+
 ## Belum Tersedia (rencana)
 
 - **Swagger / OpenAPI interaktif** belum ada (tidak ada dependency maupun setup di `app.js`). Dokumentasi endpoint saat ini mengandalkan file ini. Lihat `PROGRESS.md` (Phase 2 — Item 3).
-- Semua model lama sudah memiliki API; SosAlert, Facility, ReportLike, ReportComment sudah ada di skema dan akan mendapat API di tugas roadmap 1.3, 2.1, dan 3.1.
+- Semua model lama dan `SosAlert` sudah memiliki API; Facility, ReportLike, ReportComment sudah ada di skema dan akan mendapat API di tugas roadmap 2.1 dan 3.1.

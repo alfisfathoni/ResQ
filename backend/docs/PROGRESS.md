@@ -1,14 +1,14 @@
 # ResQ Backend — Status Pengerjaan
 
-> **Terakhir diperbarui:** 2026-10-29 (T6 — R-0.9; sebelumnya T5 — R-0.8 bagian kode; T4 — R-0.7, T3 — R-0.1, R-0.4, R-0.5, R-0.6)
+> **Terakhir diperbarui:** 2026-10-30 (T7 — R-1.3; sebelumnya T6 — R-0.9; T5 — R-0.8 bagian kode; T4 — R-0.7, T3 — R-0.1, R-0.4, R-0.5, R-0.6)
 > **Sumber kebenaran:** HANYA kode — seluruh `src/` (app.js, routes, controllers, services, validations, middleware, utils, config), `prisma/schema.prisma`, dan seluruh migrasi Prisma. Dokumentasi lama TIDAK dijadikan acuan.
 > **Metode:** Setiap file di `src/` dibaca baris per baris. Jika dokumen lama bertentangan dengan kode, kode yang menang dan dokumen diperbarui mengikuti kode.
 > **Aturan:** Setiap kali menyelesaikan atau mengubah fitur, perbarui tabel di bawah ini. Status yang jujur lebih berguna daripada status yang optimis.
 
 ## Ringkasan (kondisi backend saat ini)
 
-Backend ResQ kini memiliki **sembilan modul fitur yang berfungsi penuh** end-to-end (route → controller → service → validasi → Prisma):
-**Authentication (termasuk User Profile)**, **Emergency Contact**, **Incident Report**, **Report Media**, **Guide**, **Friendship**, **Notification**, **Sharing Session**, dan **User Utility**. Semua model lama sudah memiliki API; SosAlert, Facility, ReportLike, ReportComment sudah ada di skema dan akan mendapat API di tugas roadmap 1.3, 2.1, dan 3.1.
+Backend ResQ kini memiliki **sepuluh modul fitur yang berfungsi penuh** end-to-end (route → controller → service → validasi → Prisma):
+**Authentication (termasuk User Profile)**, **Emergency Contact**, **Incident Report**, **Report Media**, **Guide**, **Friendship**, **Notification**, **Sharing Session**, **User Utility**, dan **SOS** (R-1.3). Semua model lama dan `SosAlert` sudah memiliki API; Facility, ReportLike, ReportComment sudah ada di skema dan akan mendapat API di tugas roadmap 2.1 dan 3.1.
 
 Infrastruktur lintas-sistem & keamanan:
 - **Security Middlewares (Turn 2)**:
@@ -49,6 +49,7 @@ Legenda status:
 | Turn 4 (T4) — 0.7 | `resend-verification`, halaman reset password, verify-email HTML, flag `AUTO_VERIFY_EMAIL` | ✅ |
 | Turn 5 (T5) — 0.8 | Persiapan deploy (bagian kode + panduan): `trust proxy`, redaksi token di log, rate limit dapat diatur, `DEPLOYMENT.md`. **Deploy belum dilakukan.** | ✅ (kode) / ⬜ (deploy) |
 | Turn 6 (T6) — 0.9 | Postman collection + environment (`postman/`) dan README akar (`README.md`) | ✅ |
+| Turn 7 (T7) — 1.3 | Modul SOS (`/api/sos`) + util normalisasi nomor telepon (`utils/phone.js`) | ✅ |
 | Phase 2 — Item 3 | API Documentation (Swagger/OpenAPI) | ⬜ |
 
 ## Status Per Fitur
@@ -82,7 +83,8 @@ Legenda status:
 | **Swagger / OpenAPI** | ⬜ | Belum ada dependency maupun setup di `app.js`. = Phase 2 Item 3. |
 | **Testing** | ⬜ | Belum ada framework test, file test, atau script `test` di `package.json`. |
 | **Documentation** | ✅ | Folder `docs/` diaudit ulang & disinkronkan dengan kode pada tanggal di atas. |
-| **R-1.1 Migrasi skema** | ✅ | Migrasi tunggal `resq_extend_schema`: model baru `SosAlert`, `Facility`, `ReportLike`, `ReportComment`; field baru di `User`, `SharingSession`, `IncidentReport`; enum baru dan nilai enum tambahan. **Model baru belum memiliki API** (tanpa route/controller/service). |
+| **R-1.1 Migrasi skema** | ✅ | Migrasi tunggal `resq_extend_schema`: model baru `SosAlert`, `Facility`, `ReportLike`, `ReportComment`; field baru di `User`, `SharingSession`, `IncidentReport`; enum baru dan nilai enum tambahan. `SosAlert` kini punya API (R-1.3); `Facility`, `ReportLike`, `ReportComment` **belum memiliki API**. |
+| **SOS (R-1.3)** | ✅ | `POST /` (idempoten: 201 baru / 200 diperbarui), `GET /active`, `GET /` (paginasi), `PATCH /:id/resolve`. Notifikasi `SOS_ALERT` ke teman `ACCEPTED` + pengguna yang nomornya cocok dengan kontak darurat. Rate limit 5/menit per user. |
 
 ## Catatan Roadmap
 
@@ -109,6 +111,16 @@ Legenda status:
   - Environment tidak berisi kredensial: semua nilai kosong kecuali `baseUrl` (`http://localhost:3000`; ganti dengan URL deploy setelah deploy, emulator Android memakai `http://10.0.2.2:3000`).
   - `README.md` di root backend: deskripsi, SDG 3/5/11, tech stack, prasyarat, langkah lokal, script, struktur folder, cara memakai Postman, alur autentikasi, dan catatan akun admin/demo tanpa kata sandi nyata.
 
+- **R-1.3 ✅ Modul SOS** — file: `validations/sos.validation.js`, `services/sos.service.js`, `controllers/sos.controller.js`, `routes/sos.routes.js` (terdaftar di `/api/sos`), `utils/phone.js`, dan `sosLimiter` di `middleware/rate-limit.middleware.js`. Tanpa perubahan skema/migrasi (memakai tabel `sos_alert` dari R-1.1).
+  - **Idempoten:** user dengan SOS `ACTIVE` yang memanggil `POST /api/sos` lagi **memperbarui** SOS itu (200: lokasi, kategori, dan `message` bila dikirim), bukan membuat baru (201). Notifikasi hanya dikirim saat SOS baru dibuat, atau saat `category` berubah pada SOS yang diperbarui; pembaruan lokasi biasa tidak mengirim notifikasi.
+  - **Serialisasi anti-duplikat:** cek-lalu-buat dijalankan dalam transaksi dengan `pg_advisory_xact_lock` per user, karena skema tidak punya constraint unik "satu SOS aktif per user". Lihat catatan batasan di bawah.
+  - **Notifikasi `SOS_ALERT` (best-effort):** ke teman `ACCEPTED` + pengguna yang `phoneNumber`-nya cocok dengan kontak darurat pengirim **dan** berakun `isVerified = true` dengan role `USER` (nomor dinormalisasi lalu dicocokkan dengan `IN` pada varian `+62…`, `62…`, `0…`). Teman `ACCEPTED` tetap penerima tanpa syarat tambahan. Tanpa duplikat dan tanpa pengirim. Field `Notification`: `userId` = penerima, `senderId` = pengirim, `type = SOS_ALERT`, `title`, `message` (nama, kategori, tautan peta).
+  - **Respons** memuat `alert`, `emergencyContacts` (urut `priority`), dan `shareText`.
+  - **Rate limit:** `sosLimiter` maks 5 request / menit **per user** (kunci `req.user.id`, dipasang setelah `authenticate`), termasuk pembaruan lokasi lewat `POST`.
+  - **Resolve:** hanya pemilik (bukan pemilik atau tidak ada → 404), hanya dari `ACTIVE` (selain itu 409), mengisi `resolvedAt`; pembaruan status bersifat kondisional sehingga dua resolve bersamaan tidak keduanya berhasil.
+  - **Batasan yang diketahui (nomor telepon belum diverifikasi OTP):** `User.phoneNumber` hanya divalidasi formatnya saat register dan tidak dibuktikan kepemilikannya (tidak ada OTP). Siapa pun bisa mendaftar dengan nomor orang lain. Mitigasi sebagian: pencocokan lewat nomor kontak darurat hanya menjangkau akun `isVerified = true` (email terverifikasi) dan role `USER`, bukan akun yang belum terverifikasi atau ADMIN. Ini **belum** menjamin pemilik nomor yang sebenarnya; akun terverifikasi email tetap bisa memakai nomor milik orang lain. Penjaminan penuh butuh verifikasi nomor (OTP), di luar lingkup saat ini.
+  - **Batasan yang diketahui (anti-duplikat):** kunci advisory hanya melindungi request yang lewat kode ini. Penjaminan di tingkat database (partial unique index `(user_id) WHERE status = 'ACTIVE'`) butuh migrasi skema dan sengaja tidak dibuat di tugas ini.
+
 - **R-1.1 ✅ Migrasi skema tunggal (SosAlert, Facility, ReportLike, ReportComment, field baru, enum baru)** — folder migrasi `prisma/migrations/20261026053638_resq_extend_schema/`, hanya berisi penambahan (tanpa `DROP`). Perubahan:
   - Enum baru: `ReportStatus`, `SosCategory`, `SosStatus`, `FacilityType`. Nilai baru: `GuideCategory.LEGAL`, `IncidentCategory.HARASSMENT`/`PUBLIC_FACILITY`, `NotificationType.SOS_ALERT`/`SHARE_ARRIVED`.
   - `User.locationUpdatedAt`; `SharingSession.expiresAt`, `destinationName`, `destinationLatitude`, `destinationLongitude`; `IncidentReport.status` (default `SUBMITTED`), `statusNote`, `isAnonymous` (default `false`) beserta index `createdAt`, `category`, `status`, `[latitude, longitude]`.
@@ -127,10 +139,11 @@ Legenda status:
 - **Notification** `/api/notifications`* : `GET /` (paginasi), `GET /unread-count`, `PATCH /read-all`, `PATCH /:id/read`, `DELETE /:id`.
 - **Sharing Session** `/api/sharing-sessions`* : `POST /`, `GET /active` (paginasi), `GET /:id`, `PATCH /:id/stop`.
 - **User Utility** `/api/users`* : `GET /search` (paginasi), `GET /:id`, `GET /:id/friends` (paginasi).
+- **SOS** `/api/sos`* : `POST /` (201 baru / 200 diperbarui; 5 req/menit per user), `GET /active`, `GET /` (paginasi), `PATCH /:id/resolve`.
 
 (* = butuh `Authorization: Bearer <accessToken>`)
 
-Seluruh router di atas terdaftar di `app.js` (9 feature router + router halaman browser + health check), dan `errorHandler` global terpasang paling akhir.
+Seluruh router di atas terdaftar di `app.js` (10 feature router + router halaman browser + health check), dan `errorHandler` global terpasang paling akhir.
 
 ## Detail Terverifikasi
 

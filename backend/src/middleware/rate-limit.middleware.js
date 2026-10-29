@@ -20,16 +20,20 @@ const DEFAULT_REFRESH_MAX = 100;
 /**
  * Build a limiter that answers 429 through the standard sendError envelope.
  * @param {object} options
- * @param {number} options.max - Max requests per IP per window.
+ * @param {number} options.max - Max requests per key per window.
  * @param {string} options.message - Message returned with the 429.
+ * @param {number} [options.windowMs] - Window length (default 15 minutes).
+ * @param {(req: import("express").Request) => string} [options.keyGenerator] -
+ *   Custom counter key; defaults to the client IP.
  * @returns {import("express").RequestHandler}
  */
-function buildLimiter({ max, message }) {
+function buildLimiter({ max, message, windowMs = WINDOW_MS, keyGenerator }) {
   return rateLimit({
-    windowMs: WINDOW_MS,
+    windowMs,
     limit: max,
     standardHeaders: true, // Draft-6 RateLimit-* headers
     legacyHeaders: false, // Disable deprecated X-RateLimit-* headers
+    ...(keyGenerator ? { keyGenerator } : {}),
     message,
     handler: (req, res, _next, options) => {
       return sendError(res, {
@@ -70,8 +74,21 @@ const refreshLimiter = buildLimiter({
   message: "Too many token refresh requests, please try again after 15 minutes.",
 });
 
+/**
+ * Limiter for POST /api/sos: max 5 requests per minute PER USER (not per IP,
+ * so people sharing a Wi-Fi network do not block each other's emergencies).
+ * Must be mounted AFTER the authenticate middleware, which sets req.user.
+ */
+const sosLimiter = buildLimiter({
+  max: 5,
+  windowMs: 60 * 1000, // 1 minute
+  keyGenerator: (req) => (req.user && req.user.id ? req.user.id : "anonymous"),
+  message: "Too many SOS requests, please try again in a minute.",
+});
+
 module.exports = {
   authLimiter,
   emailLimiter,
   refreshLimiter,
+  sosLimiter,
 };

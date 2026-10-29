@@ -1,6 +1,6 @@
 # ResQ Backend
 
-REST API untuk **ResQ**, aplikasi mobile tanggap darurat dan keselamatan. Backend ini melayani autentikasi, kontak darurat, laporan insiden beserta foto/video, panduan keselamatan, pertemanan, notifikasi, dan sesi berbagi lokasi. Fitur lanjutan (SOS, peta fasilitas, lokasi live, feed publik laporan, endpoint admin) sedang dikerjakan bertahap; lihat [`docs/PROGRESS.md`](docs/PROGRESS.md) untuk status terkini.
+REST API untuk **ResQ**, aplikasi mobile tanggap darurat dan keselamatan. Backend ini melayani autentikasi, kontak darurat, laporan insiden beserta foto/video, panduan keselamatan, pertemanan, notifikasi, sesi berbagi lokasi, dan SOS. **Modul SOS sudah tersedia** (`/api/sos`: `POST /` memicu SOS, `GET /active`, `GET /` riwayat, dan `PATCH /:id/resolve`; notifikasi ke teman dan ke kontak darurat yang akunnya terdaftar dan terverifikasi). Fitur lanjutan lain (peta fasilitas, lokasi live, feed publik laporan, endpoint admin) sedang dikerjakan bertahap; lihat [`docs/PROGRESS.md`](docs/PROGRESS.md) untuk status terkini.
 
 **SDG yang ditargetkan:** SDG 3 (Kehidupan Sehat dan Sejahtera), SDG 5 (Kesetaraan Gender), dan SDG 11 (Kota dan Permukiman yang Berkelanjutan).
 
@@ -142,6 +142,7 @@ Catatan:
 - Request bertanda ⚠️ bersifat **destruktif dan permanen**: **⚠️ Delete Account** (menghapus akun yang sedang login), **⚠️ Delete Report**, **⚠️ Delete Media**, dan **⚠️ Delete Guide (admin)**. Database dipakai bersama, jadi pakai hanya akun dan data uji.
 - Variabel panduan dipisah: `guideId` untuk membaca (List/Get Guide) dan `createdGuideId` untuk menulis. Create Guide menyimpan id ke `createdGuideId`, dan Update/Delete Guide hanya memakainya, sehingga panduan seed tidak ikut berubah atau terhapus.
 - **Report Media -> Upload Media** mengunggah file ke Cloudinary; pilih file di tab Body.
+- **SOS -> Trigger SOS** mengirim notifikasi ke teman dan kontak darurat yang terdaftar. Pakai akun uji dan akhiri dengan **Resolve SOS**.
 - Sebelum menjalankan folder Guides, pastikan `npm run seed` sudah dijalankan di database yang dipakai.
 
 ## Dokumentasi
