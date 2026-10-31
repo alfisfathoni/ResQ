@@ -1,6 +1,6 @@
 # ResQ Backend — Status Pengerjaan
 
-> **Terakhir diperbarui:** 2026-10-28 (T5 — R-0.8 bagian kode; sebelumnya T4 — R-0.7, T3 — R-0.1, R-0.4, R-0.5, R-0.6)
+> **Terakhir diperbarui:** 2026-10-29 (T6 — R-0.9; sebelumnya T5 — R-0.8 bagian kode; T4 — R-0.7, T3 — R-0.1, R-0.4, R-0.5, R-0.6)
 > **Sumber kebenaran:** HANYA kode — seluruh `src/` (app.js, routes, controllers, services, validations, middleware, utils, config), `prisma/schema.prisma`, dan seluruh migrasi Prisma. Dokumentasi lama TIDAK dijadikan acuan.
 > **Metode:** Setiap file di `src/` dibaca baris per baris. Jika dokumen lama bertentangan dengan kode, kode yang menang dan dokumen diperbarui mengikuti kode.
 > **Aturan:** Setiap kali menyelesaikan atau mengubah fitur, perbarui tabel di bawah ini. Status yang jujur lebih berguna daripada status yang optimis.
@@ -48,6 +48,7 @@ Legenda status:
 | Turn 2 (T2) — 0.3 | Standardized Pagination & Metadata Response | ✅ |
 | Turn 4 (T4) — 0.7 | `resend-verification`, halaman reset password, verify-email HTML, flag `AUTO_VERIFY_EMAIL` | ✅ |
 | Turn 5 (T5) — 0.8 | Persiapan deploy (bagian kode + panduan): `trust proxy`, redaksi token di log, rate limit dapat diatur, `DEPLOYMENT.md`. **Deploy belum dilakukan.** | ✅ (kode) / ⬜ (deploy) |
+| Turn 6 (T6) — 0.9 | Postman collection + environment (`postman/`) dan README akar (`README.md`) | ✅ |
 | Phase 2 — Item 3 | API Documentation (Swagger/OpenAPI) | ⬜ |
 
 ## Status Per Fitur
@@ -102,6 +103,11 @@ Legenda status:
   - Rate limit: keadaan awal hardcoded (`authLimiter` 20, `emailLimiter` 5 per 15 menit, dan `/refresh` ikut `authLimiter`). Kini `AUTH_RATE_LIMIT_MAX` (20), `EMAIL_RATE_LIMIT_MAX` (5), dan limiter terpisah `refreshLimiter` untuk `POST /api/auth/refresh` via `REFRESH_RATE_LIMIT_MAX` (100). Respons 429 tetap lewat `sendError`.
   - `package.json`: `engines.node` = `>=22`.
   - Panduan lengkap: `docs/DEPLOYMENT.md`.
+
+- **R-0.9 ✅ Postman collection + README akar** —
+  - `postman/ResQ.postman_collection.json` (Collection v2.1) dan `postman/ResQ.postman_environment.json` (environment **ResQ Local**). Bearer `{{accessToken}}` diatur di level collection; request publik memakai No Auth; request admin (tulis Guide) memakai `{{adminAccessToken}}`. Semua 48 route di `src/` tercakup (51 request: 3 request tambahan untuk Login Admin, prasyarat media, dan tampilan HTML verify-email). Script test menyimpan token dan `id` hasil create ke environment, dan tiap request punya test status code + `success`.
+  - Environment tidak berisi kredensial: semua nilai kosong kecuali `baseUrl` (`http://localhost:3000`; ganti dengan URL deploy setelah deploy, emulator Android memakai `http://10.0.2.2:3000`).
+  - `README.md` di root backend: deskripsi, SDG 3/5/11, tech stack, prasyarat, langkah lokal, script, struktur folder, cara memakai Postman, alur autentikasi, dan catatan akun admin/demo tanpa kata sandi nyata.
 
 - **R-1.1 ✅ Migrasi skema tunggal (SosAlert, Facility, ReportLike, ReportComment, field baru, enum baru)** — folder migrasi `prisma/migrations/20261026053638_resq_extend_schema/`, hanya berisi penambahan (tanpa `DROP`). Perubahan:
   - Enum baru: `ReportStatus`, `SosCategory`, `SosStatus`, `FacilityType`. Nilai baru: `GuideCategory.LEGAL`, `IncidentCategory.HARASSMENT`/`PUBLIC_FACILITY`, `NotificationType.SOS_ALERT`/`SHARE_ARRIVED`.

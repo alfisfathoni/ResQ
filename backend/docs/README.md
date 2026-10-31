@@ -19,6 +19,8 @@ Folder `docs/` adalah sumber dokumentasi proyek. Tujuannya agar setiap developer
 | `API_REFERENCE.md` | Daftar endpoint API yang sudah diimplementasikan |
 | `CONVENTIONS.md` | Aturan penulisan kode, pola, dan konvensi proyek |
 | `RESQ_BACKEND_ROADMAP.md` | Rencana pengerjaan lanjutan, spesifikasi endpoint baru, dan pembagian tugas |
+| [`../README.md`](../README.md) | README akar backend: cara menjalankan dari nol, script, struktur folder, alur autentikasi (di luar folder `docs/`) |
+| [`../postman/`](../postman/) | Postman collection (`ResQ.postman_collection.json`) dan environment (`ResQ.postman_environment.json`) (di luar folder `docs/`) |
 | `DEPLOYMENT.md` | Panduan deploy ke hosting cloud (Render, alternatif Railway), variabel lingkungan, verifikasi pasca-deploy, dan pemecahan masalah |
 
 ## Aturan Emas
