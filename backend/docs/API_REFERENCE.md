@@ -188,23 +188,65 @@ Aturan bisnis & validasi:
 
 ## Laporan Insiden — `/api/reports` (semua butuh auth)
 
+Baca bersifat **publik** untuk semua user terautentikasi (feed sosial); ubah/hapus hanya pemilik.
+
 | Method | Path | Status sukses | Keterangan |
 | --- | --- | --- | --- |
-| POST | `/` | 201 | Buat laporan |
-| GET | `/` | 200 | Daftar laporan user (paginasi: `page`, `limit`), diurut `createdAt` terbaru dulu |
-| GET | `/:id` | 200 | Detail satu laporan |
-| PUT | `/:id` | 200 | Update parsial |
-| DELETE | `/:id` | 200 | Hapus laporan (media ikut terhapus via cascade) |
+| POST | `/` | 201 | Buat laporan (`status` selalu `SUBMITTED`) |
+| GET | `/` | 200 | **Feed publik** laporan semua user, terbaru dulu (paginasi + filter, lihat di bawah) |
+| GET | `/mine` | 200 | Laporan milik user sendiri (paginasi: `page`, `limit`), terbaru dulu |
+| GET | `/:id` | 200 | Detail satu laporan (semua user boleh baca) |
+| PUT | `/:id` | 200 | Update parsial (hanya pemilik) |
+| DELETE | `/:id` | 200 | Hapus laporan, hanya pemilik (media ikut terhapus via cascade) |
 
-Payload & validasi:
-- `category` — wajib, salah satu enum: `CRIME, ACCIDENT, FIRE, MEDICAL, DISASTER, SUSPICIOUS, OTHER`.
-- `title` — wajib, maks 255.
+### Payload POST / PUT
+- `category` — wajib saat POST, salah satu enum: `CRIME, ACCIDENT, FIRE, MEDICAL, DISASTER, SUSPICIOUS, OTHER, HARASSMENT, PUBLIC_FACILITY`.
+- `title` — wajib saat POST, maks 255.
 - `description` — opsional, string atau `null`.
-- `latitude` — wajib, angka/numeric string dalam rentang **-90..90**.
-- `longitude` — wajib, angka/numeric string dalam rentang **-180..180**.
+- `latitude` — wajib saat POST, angka/numeric string dalam rentang **-90..90**.
+- `longitude` — wajib saat POST, angka/numeric string dalam rentang **-180..180**.
+- `isAnonymous` — opsional, boolean (atau `"true"`/`"false"`), default `false`. Bila `true`, identitas pelapor disembunyikan dari user lain.
+- `status` — **tidak dapat** dikirim pelapor. Laporan baru selalu `SUBMITTED`; mengirim `status` di POST atau PUT → **422**. Nilai enum: `SUBMITTED, IN_REVIEW, FORWARDED, RESOLVED, REJECTED` (akan diubah lewat moderasi admin, roadmap 2.3).
+- PUT bersifat parsial: minimal satu field (`category, title, description, latitude, longitude, isAnonymous`).
 - Koordinat dikembalikan sebagai **number** (bukan string Decimal).
-- Laporan milik user lain atau tidak ada → **404** (tidak membocorkan keberadaan data).
-- PUT bersifat parsial: minimal satu field.
+- PUT/DELETE pada laporan milik user lain atau yang tidak ada → **404** (tidak membocorkan keberadaan data).
+
+### GET `/` — feed publik
+Query (semua opsional; nilai tidak valid → **422**):
+- `page`, `limit` — paginasi standar (default 1 & 10, maks 50).
+- `category` — salah satu enum kategori di atas.
+- `status` — salah satu enum status di atas.
+- `days` — bilangan bulat 1..365; hanya laporan dengan `createdAt` dalam N hari terakhir.
+- `lat`, `lng` — harus dikirim berdua; mengaktifkan filter jarak.
+- `radiusKm` — > 0 dan maks 50, default **5** (butuh `lat`/`lng`).
+- `sort` — `latest` (default, `createdAt` terbaru dulu) atau `distance` (terdekat dulu, butuh `lat`/`lng`).
+
+Filter jarak memakai `prisma.$queryRaw`: *bounding box* di `WHERE` (index `[latitude, longitude]`), jarak Haversine di `SELECT`, disaring tepat ke `radiusKm`, lalu `ORDER BY` + `LIMIT`/`OFFSET`. Semua nilai memakai parameter ter-bind.
+
+Tiap item feed:
+```json
+{
+  "id": "...", "userId": "...", "category": "HARASSMENT", "title": "...", "description": "...",
+  "latitude": -6.2088, "longitude": 106.8456,
+  "status": "SUBMITTED", "statusNote": null, "isAnonymous": false,
+  "createdAt": "...", "updatedAt": "...",
+  "author": { "id": "...", "username": "...", "fullName": "...", "profilePicture": null },
+  "media": { "id": "...", "mediaUrl": "...", "mediaType": "IMAGE", "createdAt": "..." },
+  "likeCount": 0, "commentCount": 0, "likedByMe": false,
+  "distanceKm": 1.234
+}
+```
+- `media` — media **pertama** (terlama) laporan, atau `null`. Daftar lengkap lewat `/api/reports/:reportId/media` (masih owner-only).
+- `author` dan `userId` — `null` bila `isAnonymous = true` dan peminta **bukan** pemilik.
+- `likeCount`, `commentCount`, `likedByMe` — **placeholder** (selalu `0`, `0`, `false`) sampai API like & komentar tersedia (roadmap 3.1).
+- `distanceKm` — hanya ada bila `lat`/`lng` dikirim (km, 3 desimal).
+
+### GET `/mine`
+- Perilaku lama `GET /`: hanya laporan milik user, terbaru dulu, paginasi `page`/`limit`. Item berisi field laporan (`id, userId, category, title, description, latitude, longitude, status, statusNote, isAnonymous, createdAt, updatedAt`) tanpa `author`/`media`.
+
+### GET `/:id`
+- Semua user terautentikasi boleh membaca. Tidak ada → **404**.
+- Bentuk respons sama dengan item feed (tanpa `distanceKm`). `author`/`userId` di-`null`-kan bila `isAnonymous = true`, **kecuali** peminta adalah pemilik.
 
 ---
 
