@@ -12,6 +12,7 @@ const reportService = require("../services/report.service");
 const {
   validateCreateReport,
   validateUpdateReport,
+  validateFeedQuery,
 } = require("../validations/report.validation");
 
 /**
@@ -37,16 +38,41 @@ const create = asyncHandler(async (req, res) => {
 });
 
 /**
- * GET /api/reports
+ * GET /api/reports — public feed (all users' reports) with optional filters.
  */
 const list = asyncHandler(async (req, res) => {
+  const { valid, errors, data } = validateFeedQuery(req.query);
+  if (!valid) {
+    return sendError(res, {
+      statusCode: 422,
+      message: "Validation failed.",
+      errors,
+    });
+  }
+
   const pagination = parsePagination(req.query);
-  const { reports, total } = await reportService.getReports(req.user.id, pagination);
+  const { reports, total } = await reportService.getFeed(req.user.id, data, pagination);
   const meta = buildPaginationMeta(pagination.page, pagination.limit, total);
 
   return sendPaginated(res, {
     statusCode: 200,
     message: "Incident reports retrieved successfully.",
+    data: reports,
+    meta,
+  });
+});
+
+/**
+ * GET /api/reports/mine — the authenticated user's own reports.
+ */
+const listMine = asyncHandler(async (req, res) => {
+  const pagination = parsePagination(req.query);
+  const { reports, total } = await reportService.getMyReports(req.user.id, pagination);
+  const meta = buildPaginationMeta(pagination.page, pagination.limit, total);
+
+  return sendPaginated(res, {
+    statusCode: 200,
+    message: "Your incident reports retrieved successfully.",
     data: reports,
     meta,
   });
@@ -106,6 +132,7 @@ const remove = asyncHandler(async (req, res) => {
 module.exports = {
   create,
   list,
+  listMine,
   detail,
   update,
   remove,
