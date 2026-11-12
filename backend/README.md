@@ -79,7 +79,7 @@ Bila SMTP belum siap saat mencoba di lokal, isi `AUTO_VERIFY_EMAIL=true` sementa
 | --- | --- |
 | `npm run dev` | Server development dengan nodemon (tidak menjalankan migrasi) |
 | `npm start` | Produksi: `prisma migrate deploy` lalu `node src/server.js` |
-| `npm run seed` | Seed idempoten: akun admin, panduan, user demo (opsional) |
+| `npm run seed` | Seed idempoten: akun admin, panduan, fasilitas Jabodetabek, user demo (opsional) |
 | `postinstall` | Otomatis dijalankan setelah `npm install`: `prisma generate` |
 
 ## Struktur Folder
@@ -88,7 +88,7 @@ Bila SMTP belum siap saat mencoba di lokal, isi `AUTO_VERIFY_EMAIL=true` sementa
 backend/
 ├── docs/            # Dokumentasi proyek
 ├── postman/         # Postman collection dan environment
-├── prisma/          # schema.prisma, migrations/, seed.js, seed/guides.json
+├── prisma/          # schema.prisma, migrations/, seed.js, seed/guides.json, seed/facilities.json
 ├── src/
 │   ├── app.js       # Setup Express + registrasi route
 │   ├── server.js    # Entry point

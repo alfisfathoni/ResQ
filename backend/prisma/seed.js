@@ -11,7 +11,10 @@
 //   1. ADMIN account (from ADMIN_* env vars).
 //   2. Safety guides from prisma/seed/guides.json (created only if missing,
 //      matched by title + category so admin edits are never overwritten).
-//   3. Two demo users, only when SEED_DEMO_PASSWORD is set.
+//   3. Public-safety facilities (Jabodetabek) from prisma/seed/facilities.json
+//      (created only if missing, matched by name + type so admin edits are
+//      never overwritten).
+//   4. Two demo users, only when SEED_DEMO_PASSWORD is set.
 //
 // Output is a summary only. Passwords and hashes are never printed.
 
@@ -31,6 +34,12 @@ const MAX_PASSWORD_BYTES = 72;
 const RECOMMENDED_ADMIN_PASSWORD_LENGTH = 12;
 
 const GUIDE_CATEGORIES = ["SAFETY", "FIRST_AID", "DISASTER", "EMERGENCY", "LEGAL"];
+
+// Same values as src/validations/facility.validation.js (enum FacilityType).
+const { FACILITY_TYPES } = require("../src/validations/facility.validation");
+
+// Rough Jabodetabek bounds, to catch typos (e.g. swapped lat/lng) in the JSON.
+const JABODETABEK_BOUNDS = { minLat: -6.8, maxLat: -5.9, minLng: 106.3, maxLng: 107.3 };
 
 const DEFAULT_ADMIN = {
   username: "admin",
@@ -265,6 +274,75 @@ async function seedGuides() {
 }
 
 /**
+ * Load and sanity-check the facility data file.
+ * @returns {{ name: string, type: string, address: string|null, phone: string|null, latitude: number, longitude: number }[]}
+ */
+function loadFacilities() {
+  const raw = require(path.join(__dirname, "seed", "facilities.json"));
+  if (!Array.isArray(raw)) throw new SeedError("prisma/seed/facilities.json must be an array.");
+
+  const optionalString = (value, max, label, field) => {
+    if (value === undefined || value === null) return null;
+    if (typeof value !== "string" || value.trim().length > max) {
+      throw new SeedError(`${label}: ${field} must be a string of at most ${max} characters.`);
+    }
+    return value.trim() || null;
+  };
+
+  const seen = new Set();
+  const { minLat, maxLat, minLng, maxLng } = JABODETABEK_BOUNDS;
+  return raw.map((item, index) => {
+    const label = `prisma/seed/facilities.json item #${index + 1}`;
+    const name = typeof item.name === "string" ? item.name.trim() : "";
+
+    if (!name || name.length > 255) throw new SeedError(`${label}: invalid name.`);
+    if (!FACILITY_TYPES.includes(item.type)) {
+      throw new SeedError(`${label}: type must be one of ${FACILITY_TYPES.join(", ")}.`);
+    }
+    const { latitude, longitude } = item;
+    if (
+      typeof latitude !== "number" || typeof longitude !== "number" ||
+      latitude < minLat || latitude > maxLat || longitude < minLng || longitude > maxLng
+    ) {
+      throw new SeedError(`${label}: latitude/longitude must be numbers inside Jabodetabek.`);
+    }
+    const key = `${item.type}::${name}`;
+    if (seen.has(key)) throw new SeedError(`${label}: duplicate name + type.`);
+    seen.add(key);
+
+    return {
+      name,
+      type: item.type,
+      address: optionalString(item.address, 1000, label, "address"),
+      phone: optionalString(item.phone, 30, label, "phone"),
+      latitude,
+      longitude,
+    };
+  });
+}
+
+/**
+ * Create facilities that do not exist yet (matched by name + type).
+ * Existing facilities are never modified, so admin edits are preserved.
+ * @returns {Promise<{ created: number, skipped: number }>}
+ */
+async function seedFacilities() {
+  const facilities = loadFacilities();
+
+  const existing = await prisma.facility.findMany({
+    where: { OR: facilities.map(({ name, type }) => ({ name, type })) },
+    select: { name: true, type: true },
+  });
+  const existingKeys = new Set(existing.map((f) => `${f.type}::${f.name}`));
+
+  const missing = facilities.filter((f) => !existingKeys.has(`${f.type}::${f.name}`));
+  if (missing.length > 0) {
+    await prisma.facility.createMany({ data: missing });
+  }
+  return { created: missing.length, skipped: facilities.length - missing.length };
+}
+
+/**
  * Create the two demo users when SEED_DEMO_PASSWORD is set. Existing users
  * (by email) are skipped untouched.
  * @param {string} demoPassword
@@ -312,6 +390,11 @@ async function main() {
 
   const guides = await seedGuides();
   console.log(`[seed] Guides: ${guides.created} created, ${guides.skipped} already existed (skipped).`);
+
+  const facilities = await seedFacilities();
+  console.log(
+    `[seed] Facilities: ${facilities.created} created, ${facilities.skipped} already existed (skipped).`
+  );
 
   const demo = await seedDemoUsers(config.demoPassword);
   if (demo === null) {

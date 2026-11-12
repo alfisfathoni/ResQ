@@ -11,6 +11,7 @@
 const { Prisma } = require("@prisma/client");
 const prisma = require("../config/prisma");
 const { ServiceError } = require("../utils/service-error");
+const { boundingBoxConditions, haversineKmSql } = require("../utils/geo");
 
 const REPORT_FIELDS = {
   id: true,
@@ -53,9 +54,6 @@ const PUBLIC_REPORT_SELECT = {
     take: 1,
   },
 };
-
-const EARTH_RADIUS_KM = 6371;
-const KM_PER_DEGREE_LAT = 111.32;
 
 /**
  * Convert a report's Decimal latitude/longitude to plain numbers so the JSON
@@ -134,34 +132,6 @@ async function createReport(userId, data) {
 }
 
 /**
- * Compute a bounding box around a point. Used in the WHERE clause so the
- * [latitude, longitude] index can narrow rows before the exact Haversine
- * check. Longitude bounds are dropped (null) near the poles or when the box
- * crosses the antimeridian, where a simple range would be wrong.
- * @param {number} lat
- * @param {number} lng
- * @param {number} radiusKm
- * @returns {{ minLat: number, maxLat: number, minLng: number|null, maxLng: number|null }}
- */
-function boundingBox(lat, lng, radiusKm) {
-  const dLat = radiusKm / KM_PER_DEGREE_LAT;
-  const minLat = Math.max(-90, lat - dLat);
-  const maxLat = Math.min(90, lat + dLat);
-
-  const cosLat = Math.cos((lat * Math.PI) / 180);
-  if (cosLat < 1e-6) {
-    return { minLat, maxLat, minLng: null, maxLng: null };
-  }
-  const dLng = radiusKm / (KM_PER_DEGREE_LAT * cosLat);
-  const minLng = lng - dLng;
-  const maxLng = lng + dLng;
-  if (minLng < -180 || maxLng > 180) {
-    return { minLat, maxLat, minLng: null, maxLng: null };
-  }
-  return { minLat, maxLat, minLng, maxLng };
-}
-
-/**
  * Location-filtered feed page, via raw SQL.
  *
  * WHERE: bounding box on the indexed coordinates + optional category /
@@ -176,18 +146,11 @@ function boundingBox(lat, lng, radiusKm) {
  */
 async function findNearbyReportIds(filters, { skip, take }) {
   const { lat, lng, radiusKm, category, status, since, sort } = filters;
-  const box = boundingBox(lat, lng, radiusKm);
+  const latCol = Prisma.sql`r."latitude"`;
+  const lngCol = Prisma.sql`r."longitude"`;
 
-  // Coordinates are DECIMAL(10,7); casting the parameters to the same type
-  // keeps the comparison on numeric so the index stays usable.
-  const conditions = [
-    Prisma.sql`r."latitude" BETWEEN CAST(${box.minLat} AS DECIMAL(10,7)) AND CAST(${box.maxLat} AS DECIMAL(10,7))`,
-  ];
-  if (box.minLng !== null) {
-    conditions.push(
-      Prisma.sql`r."longitude" BETWEEN CAST(${box.minLng} AS DECIMAL(10,7)) AND CAST(${box.maxLng} AS DECIMAL(10,7))`
-    );
-  }
+  // Bounding box on the indexed DECIMAL(10,7) coordinates (see utils/geo.js).
+  const conditions = boundingBoxConditions(latCol, lngCol, lat, lng, radiusKm);
   if (category) {
     conditions.push(Prisma.sql`r."category" = CAST(${category} AS "incident_category")`);
   }
@@ -199,13 +162,7 @@ async function findNearbyReportIds(filters, { skip, take }) {
   }
   const where = Prisma.join(conditions, " AND ");
 
-  // Haversine; LEAST(1, …) guards asin against rounding just above 1.
-  const distance = Prisma.sql`
-    ${EARTH_RADIUS_KM} * 2 * ASIN(LEAST(1, SQRT(
-      POWER(SIN(RADIANS(r."latitude"::double precision - ${lat}::double precision) / 2), 2)
-      + COS(RADIANS(${lat}::double precision)) * COS(RADIANS(r."latitude"::double precision))
-      * POWER(SIN(RADIANS(r."longitude"::double precision - ${lng}::double precision) / 2), 2)
-    )))`;
+  const distance = haversineKmSql(latCol, lngCol, lat, lng);
 
   const nearby = Prisma.sql`
     SELECT r."id", r."created_at", ${distance} AS "distance_km"
