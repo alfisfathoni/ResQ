@@ -1,6 +1,6 @@
 # ResQ Backend — Status Pengerjaan
 
-> **Terakhir diperbarui:** 2026-10-31 (T8 — R-1.4; sebelumnya T7 — R-1.3; sebelumnya T6 — R-0.9; T5 — R-0.8 bagian kode; T4 — R-0.7, T3 — R-0.1, R-0.4, R-0.5, R-0.6)
+> **Terakhir diperbarui:** 2026-11-12 (T9 — R-1.2; sebelumnya T8 — R-1.4; T7 — R-1.3; sebelumnya T6 — R-0.9; T5 — R-0.8 bagian kode; T4 — R-0.7, T3 — R-0.1, R-0.4, R-0.5, R-0.6)
 > **Sumber kebenaran:** HANYA kode — seluruh `src/` (app.js, routes, controllers, services, validations, middleware, utils, config), `prisma/schema.prisma`, dan seluruh migrasi Prisma. Dokumentasi lama TIDAK dijadikan acuan.
 > **Metode:** Setiap file di `src/` dibaca baris per baris. Jika dokumen lama bertentangan dengan kode, kode yang menang dan dokumen diperbarui mengikuti kode.
 > **Aturan:** Setiap kali menyelesaikan atau mengubah fitur, perbarui tabel di bawah ini. Status yang jujur lebih berguna daripada status yang optimis.
@@ -50,6 +50,7 @@ Legenda status:
 | Turn 5 (T5) — 0.8 | Persiapan deploy (bagian kode + panduan): `trust proxy`, redaksi token di log, rate limit dapat diatur, `DEPLOYMENT.md`. **Deploy belum dilakukan.** | ✅ (kode) / ⬜ (deploy) |
 | Turn 6 (T6) — 0.9 | Postman collection + environment (`postman/`) dan README akar (`README.md`) | ✅ |
 | Turn 7 (T7) — 1.3 | Modul SOS (`/api/sos`) + util normalisasi nomor telepon (`utils/phone.js`) | ✅ |
+| Turn 9 (T9) — 1.2 | Lokasi live + Safe Companion (`PUT /api/location`, `GET /sharing-sessions/:id/location`, `ownerLocation`, expiry lazy, `arrived`) | ✅ |
 | Phase 2 — Item 3 | API Documentation (Swagger/OpenAPI) | ⬜ |
 
 ## Status Per Fitur
@@ -64,9 +65,10 @@ Legenda status:
 | **Guide** | ✅ | `GET /` & `GET /:id` publik; `POST`/`PUT`/`DELETE` admin (`authenticate` + `isAdmin`). Kategori enum `GuideCategory`. Listing mendukung paginasi & meta. |
 | **Friendship** | ✅ | request, list friends, list incoming requests, accept, reject, remove. Cek dua arah; revive `REJECTED`→`PENDING`. Listing mendukung paginasi & meta. |
 | **Notification** | ✅ | list, unread-count, read, read-all, delete. Dibuat via event bisnis (bukan endpoint create langsung). Listing mendukung paginasi & meta. |
-| **Sharing Session** | ✅ | start (ke semua teman ACCEPTED), list active, detail, stop. Satu sesi aktif per owner. Listing aktif mendukung paginasi & meta. |
+| **Sharing Session** | ✅ | start (`viewerIds` subset teman ACCEPTED / default semua, `durationMinutes` default 120 maks 720 → `expiresAt`, `destination`), list active (+`ownerLocation` untuk baris viewer), detail, `GET /:id/location` (viewer), stop (`arrived` → `SHARE_ARRIVED`, lokasi owner dihapus). Satu sesi aktif per owner (kunci advisory per owner). Kedaluwarsa lazy tanpa cron. Listing aktif mendukung paginasi & meta. |
+| **Lokasi Live (R-1.2)** | ✅ | `PUT /api/location` memperbarui `lastLatitude/lastLongitude/locationUpdatedAt`; **409** tanpa sesi berbagi aktif. |
 | **User Utility** | ✅ | search (by username/fullName), detail (+`friendshipStatus`), list friends. Hanya field publik. Search & friends list mendukung paginasi & meta. |
-| **Notification Integration** | ✅ | friendship (FRIEND_REQUEST, FRIEND_ACCEPTED) & sharing session (SHARE_SESSION) membuat notifikasi best-effort via `notification.service`. |
+| **Notification Integration** | ✅ | friendship (FRIEND_REQUEST, FRIEND_ACCEPTED) & sharing session (SHARE_SESSION, SHARE_ARRIVED) membuat notifikasi best-effort via `notification.service`. |
 | **Security & Logging** | ✅ | Helmet secure headers, Morgan HTTP request logging (nilai `?token=` diganti `[REDACTED]`), express-rate-limit pada auth endpoints (batas dapat diatur via env), `trust proxy` via env `TRUST_PROXY`. |
 | **Standardized Pagination** | ✅ | Helper `utils/pagination.js` (`parsePagination`, `buildPaginationMeta`) + `sendPaginated` di `utils/response.js`. Capped limit 50. |
 | **Global Error Handler** | ✅ | `middleware/error.middleware.js` terdaftar terakhir di `app.js`; map `ServiceError` + 500 generik tanpa bocor stack. |
@@ -112,6 +114,17 @@ Legenda status:
   - Environment tidak berisi kredensial: semua nilai kosong kecuali `baseUrl` (`http://localhost:3000`; ganti dengan URL deploy setelah deploy, emulator Android memakai `http://10.0.2.2:3000`).
   - `README.md` di root backend: deskripsi, SDG 3/5/11, tech stack, prasyarat, langkah lokal, script, struktur folder, cara memakai Postman, alur autentikasi, dan catatan akun admin/demo tanpa kata sandi nyata.
 
+- **R-1.2 ✅ Lokasi live + Safe Companion** — file baru: `validations/location.validation.js`, `services/location.service.js`, `controllers/location.controller.js`, `routes/location.routes.js` (terdaftar di `/api/location`). Diubah: `validations/sharing-session.validation.js`, `services/sharing-session.service.js`, `controllers/sharing-session.controller.js`, `routes/sharing-session.routes.js`. Tanpa perubahan skema/migrasi (memakai `User.locationUpdatedAt` dan field `SharingSession` dari R-1.1).
+  - **`PUT /api/location`**: body `{ latitude, longitude }`; memperbarui `lastLatitude`, `lastLongitude`, `locationUpdatedAt`. Ditolak **409** bila user tidak punya sesi aktif yang belum kedaluwarsa.
+  - **`POST /api/sharing-sessions`**: `viewerIds` (subset teman `ACCEPTED`, default semua; id bukan teman → **422**), `durationMinutes` (default 120, maks 720, mengisi `expiresAt`), `destination { name, latitude, longitude }`. Aturan satu sesi aktif per owner tetap.
+  - **`GET /api/sharing-sessions/active`**: baris di mana user adalah viewer memuat `ownerLocation { latitude, longitude, updatedAt }` (`null` bila owner belum mengirim lokasi).
+  - **`GET /api/sharing-sessions/:id/location`** (viewer): bukan viewer atau tidak ada → **404**; sesi berhenti/kedaluwarsa → **409**.
+  - **`PATCH /api/sharing-sessions/:id/stop`**: body opsional `{ arrived: true }` → notifikasi `SHARE_ARRIVED` ke tiap viewer (best-effort). Saat berhenti, `lastLatitude`, `lastLongitude` (dan `locationUpdatedAt`) owner di-set `null`.
+  - **Kedaluwarsa lazy (tanpa cron):** setiap baca sesi/lokasi, baris aktif dengan `expiresAt < now()` dinonaktifkan per grup owner (`isActive=false`, `endedAt` diisi) dan lokasi owner dihapus. Penghapusan lokasi hanya untuk owner yang sudah tidak punya sesi aktif, sehingga tidak menghapus lokasi sesi baru yang dimulai bersamaan.
+  - **Respons sesi**: field `destinationName/destinationLatitude/destinationLongitude` disajikan sebagai objek `destination` (koordinat `number`) atau `null`; `expiresAt` ikut dikembalikan.
+  - **Serialisasi:** start, stop, dan `PUT /api/location` berjalan dalam transaksi dengan `pg_advisory_xact_lock` per owner, sehingga stop tidak bisa diselingi pembaruan lokasi yang meninggalkan lokasi basi, dan dua start bersamaan tidak membuat dua sesi aktif.
+  - **Pengujian:** logika service diuji dengan Prisma tiruan (404/409/422, expiry, serialisasi, notifikasi) dan jalur HTTP 401/422 diuji tanpa database. **Belum diuji terhadap PostgreSQL sungguhan** (belum ada test otomatis). Postman collection belum diperbarui (dijadwalkan di roadmap 1.5).
+
 - **R-1.3 ✅ Modul SOS** — file: `validations/sos.validation.js`, `services/sos.service.js`, `controllers/sos.controller.js`, `routes/sos.routes.js` (terdaftar di `/api/sos`), `utils/phone.js`, dan `sosLimiter` di `middleware/rate-limit.middleware.js`. Tanpa perubahan skema/migrasi (memakai tabel `sos_alert` dari R-1.1).
   - **Idempoten:** user dengan SOS `ACTIVE` yang memanggil `POST /api/sos` lagi **memperbarui** SOS itu (200: lokasi, kategori, dan `message` bila dikirim), bukan membuat baru (201). Notifikasi hanya dikirim saat SOS baru dibuat, atau saat `category` berubah pada SOS yang diperbarui; pembaruan lokasi biasa tidak mengirim notifikasi.
   - **Serialisasi anti-duplikat:** cek-lalu-buat dijalankan dalam transaksi dengan `pg_advisory_xact_lock` per user, karena skema tidak punya constraint unik "satu SOS aktif per user". Lihat catatan batasan di bawah.
@@ -138,13 +151,14 @@ Legenda status:
 - **Guide** `/api/guides`: `GET /` (publik, paginasi), `GET /:id` (publik), `POST /` (admin), `PUT /:id` (admin), `DELETE /:id` (admin).
 - **Friendship** `/api/friendships`* : `POST /request`, `GET /` (paginasi), `GET /requests` (paginasi), `PATCH /:id/accept`, `PATCH /:id/reject`, `DELETE /:id`.
 - **Notification** `/api/notifications`* : `GET /` (paginasi), `GET /unread-count`, `PATCH /read-all`, `PATCH /:id/read`, `DELETE /:id`.
-- **Sharing Session** `/api/sharing-sessions`* : `POST /`, `GET /active` (paginasi), `GET /:id`, `PATCH /:id/stop`.
+- **Sharing Session** `/api/sharing-sessions`* : `POST /`, `GET /active` (paginasi, +`ownerLocation`), `GET /:id`, `GET /:id/location`, `PATCH /:id/stop`.
+- **Lokasi Live** `/api/location`* : `PUT /`.
 - **User Utility** `/api/users`* : `GET /search` (paginasi), `GET /:id`, `GET /:id/friends` (paginasi).
 - **SOS** `/api/sos`* : `POST /` (201 baru / 200 diperbarui; 5 req/menit per user), `GET /active`, `GET /` (paginasi), `PATCH /:id/resolve`.
 
 (* = butuh `Authorization: Bearer <accessToken>`)
 
-Seluruh router di atas terdaftar di `app.js` (10 feature router + router halaman browser + health check), dan `errorHandler` global terpasang paling akhir.
+Seluruh router di atas terdaftar di `app.js` (11 feature router + router halaman browser + health check), dan `errorHandler` global terpasang paling akhir.
 
 ## Detail Terverifikasi
 

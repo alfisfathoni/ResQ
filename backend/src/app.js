@@ -12,6 +12,7 @@ const notificationRoutes = require("./routes/notification.routes");
 const sharingSessionRoutes = require("./routes/sharing-session.routes");
 const userRoutes = require("./routes/user.routes");
 const sosRoutes = require("./routes/sos.routes");
+const locationRoutes = require("./routes/location.routes");
 const pageRoutes = require("./routes/page.routes");
 const { errorHandler } = require("./middleware/error.middleware");
 const { createRequestLogger } = require("./middleware/request-logger.middleware");
@@ -68,6 +69,7 @@ app.use("/api/notifications", notificationRoutes);
 app.use("/api/sharing-sessions", sharingSessionRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/sos", sosRoutes);
+app.use("/api/location", locationRoutes);
 
 // Browser pages opened from email links (e.g. GET /reset-password)
 app.use("/", pageRoutes);

@@ -17,6 +17,7 @@ router.use(authenticate);
 router.post("/", sharingSessionController.create);
 router.get("/active", sharingSessionController.listActive);
 router.get("/:id", sharingSessionController.detail);
+router.get("/:id/location", sharingSessionController.location);
 router.patch("/:id/stop", sharingSessionController.stop);
 
 module.exports = router;

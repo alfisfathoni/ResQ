@@ -334,22 +334,99 @@ Aturan:
 
 ## Sesi Berbagi Lokasi — `/api/sharing-sessions` (semua butuh auth)
 
-Model data: satu baris `SharingSession` per pasangan (owner, viewer). Satu "sesi" owner = sekumpulan baris dengan `startedAt` sama — satu baris per teman (`ACCEPTED`).
+Model data: satu baris `SharingSession` per pasangan (owner, viewer). Satu "sesi" owner = sekumpulan baris dengan `startedAt` sama — satu baris per viewer. Semua baris satu sesi berbagi `expiresAt` dan `destination` yang sama. Lokasi live owner disimpan di `User` (`lastLatitude`, `lastLongitude`, `locationUpdatedAt`) dan dikirim lewat `PUT /api/location` (lihat bagian **Lokasi Live**).
+
+| Method | Path | Akses | Status sukses | Keterangan |
+| --- | --- | --- | --- | --- |
+| POST | `/` | user | 201 | Mulai sesi; `data` = array baris sesi aktif |
+| GET | `/active` | user | 200 | Daftar sesi aktif (paginasi: `page`, `limit`) di mana user adalah owner atau viewer; baris viewer memuat `ownerLocation` |
+| GET | `/:id` | owner/viewer | 200 | Detail satu baris sesi |
+| GET | `/:id/location` | viewer | 200 | Lokasi terakhir owner untuk sesi ini |
+| PATCH | `/:id/stop` | owner | 200 | Hentikan sesi; menonaktifkan seluruh grup sesi dan menghapus lokasi owner |
+
+### Bentuk baris sesi
+```json
+{
+  "id": "...", "ownerId": "...", "viewerId": "...",
+  "isActive": true,
+  "startedAt": "2026-11-12T03:00:00.000Z",
+  "endedAt": null,
+  "expiresAt": "2026-11-12T05:00:00.000Z",
+  "destination": { "name": "Kos", "latitude": -6.2, "longitude": 106.8 },
+  "owner":  { "id": "...", "fullName": "...", "username": "...", "profilePicture": null },
+  "viewer": { "id": "...", "fullName": "...", "username": "...", "profilePicture": null }
+}
+```
+- `destination` bernilai `null` bila tidak diisi saat mulai. Koordinat selalu **number**.
+- `ownerLocation` hanya ada di `GET /active` pada baris di mana user adalah **viewer** (lihat di bawah). Field lokasi mentah owner tidak pernah muncul di dalam `owner`.
+
+### Kedaluwarsa (lazy, tanpa cron)
+Setiap kali sesi atau lokasi dibaca (`POST /`, `GET /active`, `GET /:id`, `GET /:id/location`, `PATCH /:id/stop`, `PUT /api/location`), baris aktif dengan `expiresAt < now()` dinonaktifkan dulu (`isActive = false`, `endedAt` diisi) untuk seluruh grup sesi owner tersebut, dan lokasi owner (`lastLatitude`, `lastLongitude`, `locationUpdatedAt`) di-set `null`. Sesi yang sudah kedaluwarsa tetapi belum dinonaktifkan tidak menghalangi owner memulai sesi baru.
+
+### POST `/` — mulai sesi
+Body opsional (body kosong = berbagi ke semua teman `ACCEPTED` selama 120 menit, tanpa tujuan):
+- `viewerIds` — opsional, array id user tidak kosong (duplikat dibuang). Semua harus teman `ACCEPTED`; bila ada yang bukan → **422** dengan `errors.viewerIds` menyebut id yang ditolak. Default: semua teman `ACCEPTED`.
+- `durationMinutes` — opsional, integer 1..720 (default **120**). Mengisi `expiresAt = startedAt + durationMinutes`.
+- `destination` — opsional, objek `{ name?, latitude, longitude }` atau `null`. `latitude` (-90..90) dan `longitude` (-180..180) wajib bila `destination` dikirim; `name` opsional, maks 255 karakter. Error per field memakai kunci `destination.latitude`, `destination.longitude`, `destination.name`.
+
+Aturan:
+- Body harus objek JSON → jika tidak **422**. Validasi field gagal → **422**.
+- Sudah punya sesi aktif (yang belum kedaluwarsa) → **409**. Tidak punya teman `ACCEPTED` → **400**.
+- Satu sesi aktif per owner tetap berlaku; permintaan bersamaan dari owner yang sama diserialkan (kunci per owner).
+- Efek samping: notifikasi `SHARE_SESSION` ke tiap viewer terpilih (best-effort).
+
+### GET `/active`
+- **200**, `data` = array baris sesi aktif (owner atau viewer), terbaru dulu, dengan `meta` paginasi.
+- Pada baris di mana user adalah **viewer**, ada tambahan:
+  ```json
+  "ownerLocation": { "latitude": -6.2088, "longitude": 106.8456, "updatedAt": "2026-11-12T03:05:00.000Z" }
+  ```
+  `ownerLocation` bernilai `null` bila owner belum mengirim lokasi sejak sesi dimulai. Baris milik user sendiri (owner) tidak memiliki field ini. Dengan ini peta FE cukup satu panggilan.
+
+### GET `/:id`
+- Bukan owner/viewer atau tidak ada → **404**. Sesi yang sudah kedaluwarsa dikembalikan dengan `isActive: false`.
+
+### GET `/:id/location` — lokasi owner (viewer saja)
+- **200**:
+  ```json
+  {
+    "sessionId": "...",
+    "ownerId": "...",
+    "ownerLocation": { "latitude": -6.2088, "longitude": 106.8456, "updatedAt": "2026-11-12T03:05:00.000Z" }
+  }
+  ```
+  `ownerLocation` bernilai `null` bila owner belum mengirim lokasi.
+- Sesi tidak ada **atau** user bukan viewer sesi itu (termasuk owner-nya sendiri) → **404**.
+- Sesi sudah dihentikan atau kedaluwarsa → **409**.
+
+### PATCH `/:id/stop` — hentikan sesi (owner saja)
+- Body opsional `{ "arrived": true }`. `arrived` harus boolean → jika tidak **422**.
+- Menonaktifkan semua baris grup sesi (`isActive = false`, `endedAt` diisi) dan men-set `lastLatitude`, `lastLongitude`, `locationUpdatedAt` owner menjadi `null`.
+- Bila `arrived: true`, tiap viewer menerima notifikasi `SHARE_ARRIVED` (best-effort): judul `Arrived safely`, isi `<nama> has arrived safely at <nama tujuan>.` (tanpa ` at …` bila tujuan tidak bernama).
+- Bukan owner atau tidak ada → **404**; sesi sudah berhenti atau kedaluwarsa → **409**.
+- `data` = array baris sesi yang dihentikan.
+
+---
+
+## Lokasi Live — `/api/location` (butuh auth)
 
 | Method | Path | Status sukses | Keterangan |
 | --- | --- | --- | --- |
-| POST | `/` | 201 | Mulai sesi: berbagi lokasi ke semua teman `ACCEPTED`; `data` = array baris sesi aktif |
-| GET | `/active` | 200 | Daftar sesi aktif (paginasi: `page`, `limit`) di mana user adalah owner atau viewer |
-| GET | `/:id` | 200 | Detail satu baris sesi (hanya owner atau viewer-nya) |
-| PATCH | `/:id/stop` | 200 | Hentikan sesi (hanya owner); menonaktifkan seluruh grup sesi |
+| PUT | `/` | 200 | Perbarui lokasi live user (owner sesi berbagi) |
 
-Aturan:
-- Body boleh kosong; jika dikirim harus berupa objek JSON (bukan array/nilai lain) → jika tidak **422**.
-- Sudah punya sesi aktif → **409**. Tidak punya teman `ACCEPTED` → **400**.
-- Detail: bukan owner/viewer atau tidak ada → **404**.
-- Stop: bukan owner atau tidak ada → **404**; sesi sudah berhenti → **409**.
-- Respons menyertakan preview `owner` & `viewer`.
-- Efek samping: memulai sesi mengirim notifikasi `SHARE_SESSION` ke tiap teman (best-effort).
+### PUT `/`
+- Body: `latitude` (wajib, -90..90) dan `longitude` (wajib, -180..180), angka atau string numerik → jika tidak **422**.
+- Memperbarui `lastLatitude`, `lastLongitude`, dan `locationUpdatedAt` user.
+- User tidak punya sesi berbagi aktif (atau sesinya sudah kedaluwarsa) → **409**. Lokasi hanya disimpan selama ada viewer yang berhak melihatnya.
+- **200**, `data`:
+  ```json
+  { "latitude": -6.2088, "longitude": 106.8456, "updatedAt": "2026-11-12T03:05:00.000Z" }
+  ```
+
+### Panduan untuk FE
+- Owner: `POST /api/sharing-sessions` → kirim `PUT /api/location` berkala (mis. tiap 10-15 detik) selama sesi aktif → `PATCH /api/sharing-sessions/:id/stop` (dengan `{ "arrived": true }` bila sampai tujuan). **409** dari `PUT /api/location` berarti sesi sudah berhenti/kedaluwarsa: hentikan pengiriman lokasi.
+- Viewer: polling `GET /api/sharing-sessions/active` (semua sesi + `ownerLocation` dalam satu panggilan) atau `GET /api/sharing-sessions/:id/location` untuk satu sesi. **409** berarti sesi berakhir.
+- `PUT /api/location` tidak memakai rate limit khusus (berbeda dari `POST /api/sos`).
 
 ---
 
