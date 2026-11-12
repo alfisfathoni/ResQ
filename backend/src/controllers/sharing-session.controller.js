@@ -12,13 +12,14 @@ const { parsePagination, buildPaginationMeta } = require("../utils/pagination");
 const sharingSessionService = require("../services/sharing-session.service");
 const {
   validateCreateSharingSession,
+  validateStopSharingSession,
 } = require("../validations/sharing-session.validation");
 
 /**
  * POST /api/sharing-sessions
  */
 const create = asyncHandler(async (req, res) => {
-  const { valid, errors } = validateCreateSharingSession(req.body);
+  const { valid, errors, data } = validateCreateSharingSession(req.body);
   if (!valid) {
     return sendError(res, {
       statusCode: 422,
@@ -27,7 +28,7 @@ const create = asyncHandler(async (req, res) => {
     });
   }
 
-  const sessions = await sharingSessionService.startSession(req.user.id);
+  const sessions = await sharingSessionService.startSession(req.user.id, data);
 
   return sendSuccess(res, {
     statusCode: 201,
@@ -72,12 +73,38 @@ const detail = asyncHandler(async (req, res) => {
 });
 
 /**
+ * GET /api/sharing-sessions/:id/location
+ */
+const location = asyncHandler(async (req, res) => {
+  const result = await sharingSessionService.getSessionLocation(
+    req.user.id,
+    req.params.id
+  );
+
+  return sendSuccess(res, {
+    statusCode: 200,
+    message: "Owner location retrieved successfully.",
+    data: result,
+  });
+});
+
+/**
  * PATCH /api/sharing-sessions/:id/stop
  */
 const stop = asyncHandler(async (req, res) => {
+  const { valid, errors, data } = validateStopSharingSession(req.body);
+  if (!valid) {
+    return sendError(res, {
+      statusCode: 422,
+      message: "Validation failed.",
+      errors,
+    });
+  }
+
   const sessions = await sharingSessionService.stopSession(
     req.user.id,
-    req.params.id
+    req.params.id,
+    data
   );
 
   return sendSuccess(res, {
@@ -91,5 +118,6 @@ module.exports = {
   create,
   listActive,
   detail,
+  location,
   stop,
 };
