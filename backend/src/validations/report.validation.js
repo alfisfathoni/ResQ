@@ -12,7 +12,20 @@ const INCIDENT_CATEGORIES = [
   "DISASTER",
   "SUSPICIOUS",
   "OTHER",
+  "HARASSMENT",
+  "PUBLIC_FACILITY",
 ];
+
+// Valid ReportStatus enum values (must match prisma/schema.prisma exactly).
+// Only used to filter the feed: users cannot set a status themselves.
+const REPORT_STATUSES = ["SUBMITTED", "IN_REVIEW", "FORWARDED", "RESOLVED", "REJECTED"];
+
+// Feed sort orders. `distance` needs lat/lng.
+const FEED_SORTS = ["latest", "distance"];
+
+const DEFAULT_RADIUS_KM = 5;
+const MAX_RADIUS_KM = 50;
+const MAX_DAYS = 365;
 
 function isNonEmptyString(value) {
   return typeof value === "string" && value.trim().length > 0;
@@ -38,6 +51,18 @@ function parseCoordinate(value, min, max) {
   if (!Number.isFinite(num)) return null;
   if (num < min || num > max) return null;
   return num;
+}
+
+/**
+ * Parse an optional boolean given as a JSON boolean or "true"/"false".
+ * @param {*} value
+ * @returns {boolean|null} The boolean, or null when invalid.
+ */
+function parseBoolean(value) {
+  if (typeof value === "boolean") return value;
+  if (value === "true") return true;
+  if (value === "false") return false;
+  return null;
 }
 
 /**
@@ -99,6 +124,22 @@ function validateCreateReport(body = {}) {
     } else {
       data.longitude = lng;
     }
+  }
+
+  // isAnonymous (optional, defaults to false in the database)
+  if (body.isAnonymous !== undefined && body.isAnonymous !== null) {
+    const isAnonymous = parseBoolean(body.isAnonymous);
+    if (isAnonymous === null) {
+      errors.isAnonymous = "isAnonymous must be a boolean.";
+    } else {
+      data.isAnonymous = isAnonymous;
+    }
+  }
+
+  // status is never accepted from the client: new reports are always
+  // SUBMITTED (schema default) and only moderation may change it.
+  if (body.status !== undefined) {
+    errors.status = "Status cannot be set by the reporter.";
   }
 
   return {
@@ -168,10 +209,118 @@ function validateUpdateReport(body = {}) {
     }
   }
 
+  if (body.isAnonymous !== undefined) {
+    const isAnonymous = parseBoolean(body.isAnonymous);
+    if (isAnonymous === null) {
+      errors.isAnonymous = "isAnonymous must be a boolean.";
+    } else {
+      data.isAnonymous = isAnonymous;
+    }
+  }
+
+  // The reporter can never change the status (moderation only).
+  if (body.status !== undefined) {
+    errors.status = "Status cannot be updated by the reporter.";
+  }
+
   // Reject an empty update body.
   if (Object.keys(data).length === 0 && Object.keys(errors).length === 0) {
     errors._ =
-      "Provide at least one field to update (category, title, description, latitude, or longitude).";
+      "Provide at least one field to update (category, title, description, latitude, longitude, or isAnonymous).";
+  }
+
+  return {
+    valid: Object.keys(errors).length === 0,
+    errors,
+    data,
+  };
+}
+
+/**
+ * Validate the GET /api/reports (public feed) query string.
+ *
+ * All filters are optional. `lat` and `lng` must be sent together; when they
+ * are, `radiusKm` defaults to 5 (max 50). `days` limits the feed to reports
+ * created in the last N days (1..365). `sort` is `latest` (default) or
+ * `distance` (requires lat/lng). Pagination (`page`, `limit`) is parsed
+ * separately by utils/pagination.js.
+ *
+ * @param {object} query - req.query
+ * @returns {{ valid: boolean, errors: Record<string,string>, data: { category?: string, status?: string, days?: number, lat?: number, lng?: number, radiusKm?: number, sort: string } }}
+ */
+function validateFeedQuery(query = {}) {
+  const errors = {};
+  const data = {};
+
+  const has = (key) =>
+    query[key] !== undefined && query[key] !== null && query[key] !== "";
+
+  if (has("category")) {
+    if (!INCIDENT_CATEGORIES.includes(query.category)) {
+      errors.category = `Category must be one of: ${INCIDENT_CATEGORIES.join(", ")}.`;
+    } else {
+      data.category = query.category;
+    }
+  }
+
+  if (has("status")) {
+    if (!REPORT_STATUSES.includes(query.status)) {
+      errors.status = `Status must be one of: ${REPORT_STATUSES.join(", ")}.`;
+    } else {
+      data.status = query.status;
+    }
+  }
+
+  if (has("days")) {
+    const days = Number(query.days);
+    if (!Number.isInteger(days) || days < 1 || days > MAX_DAYS) {
+      errors.days = `Days must be an integer between 1 and ${MAX_DAYS}.`;
+    } else {
+      data.days = days;
+    }
+  }
+
+  const hasLat = has("lat");
+  const hasLng = has("lng");
+  if (hasLat || hasLng) {
+    if (!hasLat || !hasLng) {
+      errors.location = "lat and lng must be provided together.";
+    } else {
+      const lat = parseCoordinate(query.lat, -90, 90);
+      const lng = parseCoordinate(query.lng, -180, 180);
+      if (lat === null) errors.lat = "lat must be a decimal between -90 and 90.";
+      if (lng === null) errors.lng = "lng must be a decimal between -180 and 180.";
+      if (lat !== null && lng !== null) {
+        data.lat = lat;
+        data.lng = lng;
+      }
+    }
+  }
+
+  if (has("radiusKm")) {
+    if (!hasLat || !hasLng) {
+      errors.radiusKm = "radiusKm requires lat and lng.";
+    } else {
+      const radius = parseCoordinate(query.radiusKm, 0, MAX_RADIUS_KM);
+      if (radius === null || radius <= 0) {
+        errors.radiusKm = `radiusKm must be a number greater than 0 and at most ${MAX_RADIUS_KM}.`;
+      } else {
+        data.radiusKm = radius;
+      }
+    }
+  } else if (data.lat !== undefined) {
+    data.radiusKm = DEFAULT_RADIUS_KM;
+  }
+
+  data.sort = "latest";
+  if (has("sort")) {
+    if (!FEED_SORTS.includes(query.sort)) {
+      errors.sort = `Sort must be one of: ${FEED_SORTS.join(", ")}.`;
+    } else if (query.sort === "distance" && (!hasLat || !hasLng)) {
+      errors.sort = "Sorting by distance requires lat and lng.";
+    } else {
+      data.sort = query.sort;
+    }
   }
 
   return {
@@ -182,6 +331,9 @@ function validateUpdateReport(body = {}) {
 }
 
 module.exports = {
+  INCIDENT_CATEGORIES,
+  REPORT_STATUSES,
   validateCreateReport,
   validateUpdateReport,
+  validateFeedQuery,
 };

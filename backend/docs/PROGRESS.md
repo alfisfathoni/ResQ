@@ -1,6 +1,6 @@
 # ResQ Backend — Status Pengerjaan
 
-> **Terakhir diperbarui:** 2026-10-30 (T7 — R-1.3; sebelumnya T6 — R-0.9; T5 — R-0.8 bagian kode; T4 — R-0.7, T3 — R-0.1, R-0.4, R-0.5, R-0.6)
+> **Terakhir diperbarui:** 2026-10-31 (T8 — R-1.4; sebelumnya T7 — R-1.3; sebelumnya T6 — R-0.9; T5 — R-0.8 bagian kode; T4 — R-0.7, T3 — R-0.1, R-0.4, R-0.5, R-0.6)
 > **Sumber kebenaran:** HANYA kode — seluruh `src/` (app.js, routes, controllers, services, validations, middleware, utils, config), `prisma/schema.prisma`, dan seluruh migrasi Prisma. Dokumentasi lama TIDAK dijadikan acuan.
 > **Metode:** Setiap file di `src/` dibaca baris per baris. Jika dokumen lama bertentangan dengan kode, kode yang menang dan dokumen diperbarui mengikuti kode.
 > **Aturan:** Setiap kali menyelesaikan atau mengubah fitur, perbarui tabel di bawah ini. Status yang jujur lebih berguna daripada status yang optimis.
@@ -59,7 +59,7 @@ Legenda status:
 | **Authentication** | ✅ | register, login (email/username), refresh, logout, verify-email (HTML untuk browser, JSON untuk API), resend-verification, forgot/reset-password (+ halaman browser `GET /reset-password`). Diproteksi rate limiter (default maks 20 req/15 min; resend-verification 5 req/15 min; refresh 100 req/15 min; semuanya dapat diatur lewat env). Controller auth masih `try/catch` lokal. |
 | **User Profile** | ✅ | Bagian modul auth: `GET/PUT/DELETE /api/auth/profile`. Update terbatas `fullName`, `phoneNumber`, `profilePicture`. DELETE menolak ADMIN (403). |
 | **Emergency Contact** | ✅ | CRUD penuh. Maks 5/user, `priority` unik 1-5, `phoneNumber` unik per user. Listing mendukung paginasi & meta. |
-| **Incident Report** | ✅ | CRUD penuh. `category` enum, koordinat divalidasi & di-serialize ke `Number`. Listing mendukung paginasi & meta. |
+| **Incident Report** | ✅ | CRUD penuh. `category` enum (termasuk `HARASSMENT`, `PUBLIC_FACILITY`), `isAnonymous`, `status` default `SUBMITTED` (tidak bisa diubah pelapor). Koordinat divalidasi & di-serialize ke `Number`. Baca publik (feed + detail); PUT/DELETE owner-only (404). Listing mendukung paginasi & meta. |
 | **Report Media** | ✅ | Upload (Multer→Cloudinary), list, delete. Hapus asset best-effort lalu hapus baris DB. Listing mendukung paginasi & meta. |
 | **Guide** | ✅ | `GET /` & `GET /:id` publik; `POST`/`PUT`/`DELETE` admin (`authenticate` + `isAdmin`). Kategori enum `GuideCategory`. Listing mendukung paginasi & meta. |
 | **Friendship** | ✅ | request, list friends, list incoming requests, accept, reject, remove. Cek dua arah; revive `REJECTED`→`PENDING`. Listing mendukung paginasi & meta. |
@@ -84,6 +84,7 @@ Legenda status:
 | **Testing** | ⬜ | Belum ada framework test, file test, atau script `test` di `package.json`. |
 | **Documentation** | ✅ | Folder `docs/` diaudit ulang & disinkronkan dengan kode pada tanggal di atas. |
 | **R-1.1 Migrasi skema** | ✅ | Migrasi tunggal `resq_extend_schema`: model baru `SosAlert`, `Facility`, `ReportLike`, `ReportComment`; field baru di `User`, `SharingSession`, `IncidentReport`; enum baru dan nilai enum tambahan. `SosAlert` kini punya API (R-1.3); `Facility`, `ReportLike`, `ReportComment` **belum memiliki API**. |
+| **Feed publik laporan (T8 / R-1.4)** | ✅ | `GET /api/reports` = feed publik terbaru dulu; filter `category`, `status`, `days`, `lat`+`lng`+`radiusKm` (default 5, maks 50), `sort` (`latest`/`distance`). Filter jarak via `$queryRaw` (bounding box di `WHERE` + Haversine di `SELECT`, parameter ter-bind, `LIMIT`/`OFFSET`). Item: media pertama, `author` di-`null`-kan bila anonim (kecuali pemilik), placeholder `likeCount`/`commentCount`/`likedByMe`. `GET /api/reports/mine` = perilaku lama. `GET /:id` bisa dibaca semua user. Query mentah belum diuji terhadap database sungguhan (belum ada test otomatis). |
 | **SOS (R-1.3)** | ✅ | `POST /` (idempoten: 201 baru / 200 diperbarui), `GET /active`, `GET /` (paginasi), `PATCH /:id/resolve`. Notifikasi `SOS_ALERT` ke teman `ACCEPTED` + pengguna yang nomornya cocok dengan kontak darurat. Rate limit 5/menit per user. |
 
 ## Catatan Roadmap

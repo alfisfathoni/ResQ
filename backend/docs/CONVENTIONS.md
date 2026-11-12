@@ -50,6 +50,8 @@ Dokumen ini menjaga konsistensi gaya kode saat berganti kontributor atau AI Agen
 ### Kepemilikan data (ownership)
 - Data selalu diambil lalu dicek `record.userId === req.user.id`.
 - Jika tidak ada **atau** milik user lain → **404** yang sama (jangan bedakan, agar tidak membocorkan keberadaan data).
+- **Pengecualian laporan insiden (R-1.4):** baca laporan bersifat **publik** untuk semua user terautentikasi (feed `GET /api/reports` dan `GET /api/reports/:id`). Untuk laporan, aturan "data milik user lain → 404" **hanya berlaku pada `PUT` dan `DELETE /api/reports/:id`**. Laporan milik sendiri tersedia di `GET /api/reports/mine`.
+- Pada laporan `isAnonymous = true`, `author` (dan `userId`) di-`null`-kan di feed dan detail, kecuali untuk pemiliknya. Objek `author` memakai whitelist `id, username, fullName, profilePicture`; jangan pernah menyertakan email, telepon, atau lokasi user.
 
 ### Status code yang konsisten
 - Create sukses → **201**; operasi lain sukses → **200**.
@@ -61,7 +63,7 @@ Dokumen ini menjaga konsistensi gaya kode saat berganti kontributor atau AI Agen
 - **Cegah enumerasi akun:** pesan error untuk login gagal & forgot-password dibuat generik.
 - **Password di-hash** dengan bcrypt (`utils/hash.js`), tidak pernah disimpan plaintext.
 - **Refresh token disimpan di DB** agar bisa di-revoke saat logout/reset.
-- Data pengguna **selalu terikat ke pemilik** (`userId`), satu user tak boleh mengakses data user lain.
+- Data pengguna **selalu terikat ke pemilik** (`userId`), satu user tak boleh mengakses data user lain. Pengecualian: laporan insiden boleh **dibaca** semua user terautentikasi (lihat "Kepemilikan data"), tetapi tetap hanya bisa diubah/dihapus pemiliknya.
 - Token verifikasi email & reset password bersifat **stateless (JWT)** dengan klaim `type` — selalu cek `type` saat verifikasi agar token tak bisa dipakai lintas-tujuan.
 - Jangan commit `.env` atau menampilkan nilai rahasia di log/respons.
 - Semua `JWT_*_SECRET` (dan `DATABASE_URL`) **wajib diisi di semua environment** (development, test, production). Server menolak start tanpanya (`config/env.js`), dan `utils/jwt.js` tidak memiliki fallback. Jangan menambahkan nilai default untuk secret.
