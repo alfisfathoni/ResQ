@@ -523,7 +523,61 @@ Contoh respons sukses:
 
 ---
 
+## Fasilitas — `/api/facilities` (semua butuh auth)
+
+Fasilitas keselamatan publik untuk peta: kantor polisi, rumah sakit, klinik/puskesmas, pemadam kebakaran, halte bus, stasiun kereta. Hanya baca; CRUD admin menyusul di roadmap 2.3.
+
+| Method | Path | Status sukses | Keterangan |
+| --- | --- | --- | --- |
+| GET | `/?lat=&lng=` | 200 | Fasilitas dalam radius, terdekat dulu; tiap item memuat `distanceKm` |
+| GET | `/:id` | 200 | Detail satu fasilitas |
+
+### GET `/` — fasilitas terdekat
+Query:
+- `lat` — **wajib**, -90..90.
+- `lng` — **wajib**, -180..180.
+- `radiusKm` — opsional, > 0 dan ≤ 50 (default **5**).
+- `type` — opsional, satu atau lebih dari `POLICE`, `HOSPITAL`, `CLINIC`, `FIRE_STATION`, `BUS_STOP`, `TRAIN_STATION`. Pisahkan dengan koma (`type=POLICE,HOSPITAL`); parameter berulang (`type=POLICE&type=HOSPITAL`) juga diterima. Duplikat dibuang. Tanpa `type` = semua jenis.
+- `limit` — opsional, integer 1..100 (default **30**).
+- Nilai tidak valid (termasuk `type` di luar daftar) → **422** dengan `errors` per field.
+
+Perilaku:
+- Hanya fasilitas dengan jarak ≤ `radiusKm` yang dikembalikan, diurut `distanceKm` naik (seri: `id`), maksimal `limit` item. Tidak ada paginasi `page`; respons memakai `sendSuccess` (tanpa `meta`).
+- Jarak dihitung dengan rumus Haversine (radius bumi 6371 km) dalam kilometer, sebagai **number** tanpa pembulatan. Implementasi: `$queryRaw` dengan bounding box di `WHERE` (memakai index `[latitude, longitude]`) dan Haversine di `SELECT`; semua nilai berupa parameter ter-bind.
+- Hasil kosong → **200** dengan `data: []`.
+
+Contoh respons:
+```json
+{
+  "status": "success",
+  "success": true,
+  "message": "Facilities retrieved successfully.",
+  "data": [
+    {
+      "id": "...",
+      "name": "Stasiun Gambir",
+      "type": "TRAIN_STATION",
+      "address": "Jl. Medan Merdeka Timur, Gambir, Jakarta Pusat",
+      "phone": null,
+      "latitude": -6.1767,
+      "longitude": 106.8306,
+      "createdAt": "2026-11-12T03:00:00.000Z",
+      "updatedAt": "2026-11-12T03:00:00.000Z",
+      "distanceKm": 0.412
+    }
+  ]
+}
+```
+
+### GET `/:id`
+- **200**, `data` = objek fasilitas (bentuk sama seperti di atas, **tanpa** `distanceKm`). Koordinat berupa **number**.
+- Tidak ada → **404** `"Facility not found."`.
+
+Data awal: `npm run seed` mengisi 77 fasilitas Jabodetabek dari `prisma/seed/facilities.json` (lihat `PROGRESS.md`, R-2.1).
+
+---
+
 ## Belum Tersedia (rencana)
 
 - **Swagger / OpenAPI interaktif** belum ada (tidak ada dependency maupun setup di `app.js`). Dokumentasi endpoint saat ini mengandalkan file ini. Lihat `PROGRESS.md` (Phase 2 — Item 3).
-- Semua model lama dan `SosAlert` sudah memiliki API; Facility, ReportLike, ReportComment sudah ada di skema dan akan mendapat API di tugas roadmap 2.1 dan 3.1.
+- `SosAlert` dan `Facility` (baca) sudah memiliki API. CRUD admin fasilitas menyusul di roadmap 2.3; `ReportLike` dan `ReportComment` sudah ada di skema dan akan mendapat API di roadmap 3.1.

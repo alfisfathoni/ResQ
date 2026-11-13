@@ -1,14 +1,14 @@
 # ResQ Backend — Status Pengerjaan
 
-> **Terakhir diperbarui:** 2026-11-12 (T9 — R-1.2; sebelumnya T8 — R-1.4; T7 — R-1.3; sebelumnya T6 — R-0.9; T5 — R-0.8 bagian kode; T4 — R-0.7, T3 — R-0.1, R-0.4, R-0.5, R-0.6)
+> **Terakhir diperbarui:** 2026-11-12 (T10 — R-2.1; sebelumnya T9 — R-1.2; T8 — R-1.4; T7 — R-1.3; sebelumnya T6 — R-0.9; T5 — R-0.8 bagian kode; T4 — R-0.7, T3 — R-0.1, R-0.4, R-0.5, R-0.6)
 > **Sumber kebenaran:** HANYA kode — seluruh `src/` (app.js, routes, controllers, services, validations, middleware, utils, config), `prisma/schema.prisma`, dan seluruh migrasi Prisma. Dokumentasi lama TIDAK dijadikan acuan.
 > **Metode:** Setiap file di `src/` dibaca baris per baris. Jika dokumen lama bertentangan dengan kode, kode yang menang dan dokumen diperbarui mengikuti kode.
 > **Aturan:** Setiap kali menyelesaikan atau mengubah fitur, perbarui tabel di bawah ini. Status yang jujur lebih berguna daripada status yang optimis.
 
 ## Ringkasan (kondisi backend saat ini)
 
-Backend ResQ kini memiliki **sepuluh modul fitur yang berfungsi penuh** end-to-end (route → controller → service → validasi → Prisma):
-**Authentication (termasuk User Profile)**, **Emergency Contact**, **Incident Report**, **Report Media**, **Guide**, **Friendship**, **Notification**, **Sharing Session**, **User Utility**, dan **SOS** (R-1.3). Semua model lama dan `SosAlert` sudah memiliki API; Facility, ReportLike, ReportComment sudah ada di skema dan akan mendapat API di tugas roadmap 2.1 dan 3.1.
+Backend ResQ kini memiliki **sebelas modul fitur yang berfungsi penuh** end-to-end (route → controller → service → validasi → Prisma):
+**Authentication (termasuk User Profile)**, **Emergency Contact**, **Incident Report**, **Report Media**, **Guide**, **Friendship**, **Notification**, **Sharing Session** (+ Lokasi Live, R-1.2), **User Utility**, **SOS** (R-1.3), dan **Facility** (baca, R-2.1). Semua model lama, `SosAlert`, dan `Facility` (baca) sudah memiliki API; CRUD admin fasilitas menyusul di roadmap 2.3, sedangkan ReportLike dan ReportComment sudah ada di skema dan akan mendapat API di tugas roadmap 3.1.
 
 Infrastruktur lintas-sistem & keamanan:
 - **Security Middlewares (Turn 2)**:
@@ -51,6 +51,7 @@ Legenda status:
 | Turn 6 (T6) — 0.9 | Postman collection + environment (`postman/`) dan README akar (`README.md`) | ✅ |
 | Turn 7 (T7) — 1.3 | Modul SOS (`/api/sos`) + util normalisasi nomor telepon (`utils/phone.js`) | ✅ |
 | Turn 9 (T9) — 1.2 | Lokasi live + Safe Companion (`PUT /api/location`, `GET /sharing-sessions/:id/location`, `ownerLocation`, expiry lazy, `arrived`) | ✅ |
+| Turn 10 (T10) — 2.1 | Fasilitas: `GET /api/facilities` (Haversine, `$queryRaw`) + `GET /api/facilities/:id` + seed 77 fasilitas Jabodetabek | ✅ |
 | Phase 2 — Item 3 | API Documentation (Swagger/OpenAPI) | ⬜ |
 
 ## Status Per Fitur
@@ -67,6 +68,7 @@ Legenda status:
 | **Notification** | ✅ | list, unread-count, read, read-all, delete. Dibuat via event bisnis (bukan endpoint create langsung). Listing mendukung paginasi & meta. |
 | **Sharing Session** | ✅ | start (`viewerIds` subset teman ACCEPTED / default semua, `durationMinutes` default 120 maks 720 → `expiresAt`, `destination`), list active (+`ownerLocation` untuk baris viewer), detail, `GET /:id/location` (viewer), stop (`arrived` → `SHARE_ARRIVED`, lokasi owner dihapus). Satu sesi aktif per owner (kunci advisory per owner). Kedaluwarsa lazy tanpa cron. Listing aktif mendukung paginasi & meta. |
 | **Lokasi Live (R-1.2)** | ✅ | `PUT /api/location` memperbarui `lastLatitude/lastLongitude/locationUpdatedAt`; **409** tanpa sesi berbagi aktif. |
+| **Facility (R-2.1)** | ✅ | `GET /` (wajib `lat`+`lng`; `radiusKm` default 5 maks 50; `type` banyak dipisah koma; `limit` default 30 maks 100) terurut jarak dengan `distanceKm`; `GET /:id` (404 bila tidak ada). Hanya baca; CRUD admin di roadmap 2.3. Seed 77 fasilitas Jabodetabek. |
 | **User Utility** | ✅ | search (by username/fullName), detail (+`friendshipStatus`), list friends. Hanya field publik. Search & friends list mendukung paginasi & meta. |
 | **Notification Integration** | ✅ | friendship (FRIEND_REQUEST, FRIEND_ACCEPTED) & sharing session (SHARE_SESSION, SHARE_ARRIVED) membuat notifikasi best-effort via `notification.service`. |
 | **Security & Logging** | ✅ | Helmet secure headers, Morgan HTTP request logging (nilai `?token=` diganti `[REDACTED]`), express-rate-limit pada auth endpoints (batas dapat diatur via env), `trust proxy` via env `TRUST_PROXY`. |
@@ -85,7 +87,7 @@ Legenda status:
 | **Swagger / OpenAPI** | ⬜ | Belum ada dependency maupun setup di `app.js`. = Phase 2 Item 3. |
 | **Testing** | ⬜ | Belum ada framework test, file test, atau script `test` di `package.json`. |
 | **Documentation** | ✅ | Folder `docs/` diaudit ulang & disinkronkan dengan kode pada tanggal di atas. |
-| **R-1.1 Migrasi skema** | ✅ | Migrasi tunggal `resq_extend_schema`: model baru `SosAlert`, `Facility`, `ReportLike`, `ReportComment`; field baru di `User`, `SharingSession`, `IncidentReport`; enum baru dan nilai enum tambahan. `SosAlert` kini punya API (R-1.3); `Facility`, `ReportLike`, `ReportComment` **belum memiliki API**. |
+| **R-1.1 Migrasi skema** | ✅ | Migrasi tunggal `resq_extend_schema`: model baru `SosAlert`, `Facility`, `ReportLike`, `ReportComment`; field baru di `User`, `SharingSession`, `IncidentReport`; enum baru dan nilai enum tambahan. `SosAlert` kini punya API (R-1.3), `Facility` punya API baca (R-2.1); `ReportLike`, `ReportComment` **belum memiliki API**. |
 | **Feed publik laporan (T8 / R-1.4)** | ✅ | `GET /api/reports` = feed publik terbaru dulu; filter `category`, `status`, `days`, `lat`+`lng`+`radiusKm` (default 5, maks 50), `sort` (`latest`/`distance`). Filter jarak via `$queryRaw` (bounding box di `WHERE` + Haversine di `SELECT`, parameter ter-bind, `LIMIT`/`OFFSET`). Item: media pertama, `author` di-`null`-kan bila anonim (kecuali pemilik), placeholder `likeCount`/`commentCount`/`likedByMe`. `GET /api/reports/mine` = perilaku lama. `GET /:id` bisa dibaca semua user. Query mentah belum diuji terhadap database sungguhan (belum ada test otomatis). |
 | **SOS (R-1.3)** | ✅ | `POST /` (idempoten: 201 baru / 200 diperbarui), `GET /active`, `GET /` (paginasi), `PATCH /:id/resolve`. Notifikasi `SOS_ALERT` ke teman `ACCEPTED` + pengguna yang nomornya cocok dengan kontak darurat. Rate limit 5/menit per user. |
 
@@ -113,6 +115,15 @@ Legenda status:
   - `postman/ResQ.postman_collection.json` (Collection v2.1) dan `postman/ResQ.postman_environment.json` (environment **ResQ Local**). Bearer `{{accessToken}}` diatur di level collection; request publik memakai No Auth; request admin (tulis Guide) memakai `{{adminAccessToken}}`. Semua 48 route di `src/` tercakup (51 request: 3 request tambahan untuk Login Admin, prasyarat media, dan tampilan HTML verify-email). Script test menyimpan token dan `id` hasil create ke environment, dan tiap request punya test status code + `success`.
   - Environment tidak berisi kredensial: semua nilai kosong kecuali `baseUrl` (`http://localhost:3000`; ganti dengan URL deploy setelah deploy, emulator Android memakai `http://10.0.2.2:3000`).
   - `README.md` di root backend: deskripsi, SDG 3/5/11, tech stack, prasyarat, langkah lokal, script, struktur folder, cara memakai Postman, alur autentikasi, dan catatan akun admin/demo tanpa kata sandi nyata.
+
+- **R-2.1 ✅ Fasilitas + Haversine + seed** — file baru: `validations/facility.validation.js`, `services/facility.service.js`, `controllers/facility.controller.js`, `routes/facility.routes.js` (terdaftar di `/api/facilities`), `utils/geo.js`, `prisma/seed/facilities.json`. Diubah: `prisma/seed.js`, `services/report.service.js`. Tanpa perubahan skema/migrasi (memakai tabel `facility` dan index `[latitude, longitude]` dari R-1.1).
+  - **`GET /api/facilities`**: `lat`, `lng` wajib; `radiusKm` (default 5, maks 50); `type` (boleh banyak, dipisah koma atau parameter berulang); `limit` (default 30, maks 100). Hasil terurut jarak, tiap item memuat `distanceKm`. Tanpa paginasi `page` (hanya `limit`).
+  - **Query:** `prisma.$queryRaw` dengan bounding box di `WHERE` (memakai index `[latitude, longitude]`), Haversine di `SELECT`, filter radius tepat, `ORDER BY` jarak, `LIMIT`. Semua nilai parameter ter-bind (`Prisma.sql`), filter `type` lewat `CAST(... AS "facility_type")` per nilai. Koordinat `Decimal` dikonversi ke `Number`.
+  - **`GET /api/facilities/:id`**: detail; tidak ada → **404**.
+  - **`utils/geo.js`:** `boundingBox`, `boundingBoxConditions`, `haversineKmSql` dipindah dari `report.service.js` agar dipakai bersama feed laporan dan fasilitas. SQL feed laporan yang dihasilkan diverifikasi identik sebelum/sesudah refactor.
+  - **Seed:** `prisma/seed/facilities.json` berisi **77** fasilitas Jabodetabek (17 `HOSPITAL`, 10 `CLINIC`, 12 `POLICE`, 10 `FIRE_STATION`, 16 `TRAIN_STATION`, 12 `BUS_STOP`). `seed.js` memvalidasi isi (tipe enum, koordinat di dalam batas Jabodetabek, tanpa duplikat `name` + `type`) dan hanya membuat yang belum ada (dicocokkan `name` + `type`); data yang sudah ada tidak pernah diubah. Dua kali jalan berturut-turut: 77 dibuat lalu 0 dibuat / 77 dilewati.
+  - **Batasan data seed:** nama fasilitas nyata, tetapi **koordinat bersifat perkiraan** dan beberapa alamat hanya sampai tingkat kecamatan/kota (disusun manual, bukan hasil survei atau ekspor OSM). `phone` sengaja `null` agar tidak ada nomor yang salah. Perlu diverifikasi manusia sebelum dipakai di produksi.
+  - **Pengujian:** validator, bentuk SQL (bounding box, Haversine, parameter ter-bind, filter tipe, `ORDER BY`/`LIMIT`), 404 detail, dan idempotensi seed diuji dengan Prisma tiruan; jalur HTTP 401/422 diuji tanpa database. **Belum diuji terhadap PostgreSQL sungguhan** (belum ada test otomatis). Postman collection belum diperbarui (roadmap 1.5).
 
 - **R-1.2 ✅ Lokasi live + Safe Companion** — file baru: `validations/location.validation.js`, `services/location.service.js`, `controllers/location.controller.js`, `routes/location.routes.js` (terdaftar di `/api/location`). Diubah: `validations/sharing-session.validation.js`, `services/sharing-session.service.js`, `controllers/sharing-session.controller.js`, `routes/sharing-session.routes.js`. Tanpa perubahan skema/migrasi (memakai `User.locationUpdatedAt` dan field `SharingSession` dari R-1.1).
   - **`PUT /api/location`**: body `{ latitude, longitude }`; memperbarui `lastLatitude`, `lastLongitude`, `locationUpdatedAt`. Ditolak **409** bila user tidak punya sesi aktif yang belum kedaluwarsa.
@@ -153,12 +164,13 @@ Legenda status:
 - **Notification** `/api/notifications`* : `GET /` (paginasi), `GET /unread-count`, `PATCH /read-all`, `PATCH /:id/read`, `DELETE /:id`.
 - **Sharing Session** `/api/sharing-sessions`* : `POST /`, `GET /active` (paginasi, +`ownerLocation`), `GET /:id`, `GET /:id/location`, `PATCH /:id/stop`.
 - **Lokasi Live** `/api/location`* : `PUT /`.
+- **Fasilitas** `/api/facilities`* : `GET /` (terdekat, `limit` maks 100), `GET /:id`.
 - **User Utility** `/api/users`* : `GET /search` (paginasi), `GET /:id`, `GET /:id/friends` (paginasi).
 - **SOS** `/api/sos`* : `POST /` (201 baru / 200 diperbarui; 5 req/menit per user), `GET /active`, `GET /` (paginasi), `PATCH /:id/resolve`.
 
 (* = butuh `Authorization: Bearer <accessToken>`)
 
-Seluruh router di atas terdaftar di `app.js` (11 feature router + router halaman browser + health check), dan `errorHandler` global terpasang paling akhir.
+Seluruh router di atas terdaftar di `app.js` (12 feature router + router halaman browser + health check), dan `errorHandler` global terpasang paling akhir.
 
 ## Detail Terverifikasi
 
