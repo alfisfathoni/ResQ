@@ -8,7 +8,7 @@ val ResQRedDark      = Color(0xFFD32F2F)  // Pressed / dark shade
 val ResQDarkBadge    = Color(0xFF9E1B1B)  // Pill badge "HOLD 4S" background
 val ResQOuterRing    = Color(0xFFFF8E8E)  // Outer salmon/pink soft ring
 
-// ─── Instant Responder Colors (sesuai gambar) ─────────────────────────────────
+// ─── Instant Responder Colors  ─────────────────────────────────
 val ResponderFire    = Color(0xFFFF6D00)  // Firefighter orange
 val ResponderMedical = Color(0xFFE53935)  // Ambulance red
 val ResponderPolice  = Color(0xFF1E88E5)  // Police siren blue
