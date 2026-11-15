@@ -6,52 +6,142 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.runtime.*
+import com.example.resq.data.UserSessionManager
+import com.example.resq.ui.screen.EmergencyContactScreen
 import com.example.resq.ui.screen.HomeScreen
 import com.example.resq.ui.screen.LoginScreen
 import com.example.resq.ui.screen.RegisterScreen
+import com.example.resq.ui.screen.SplashScreen
+import com.example.resq.ui.screen.VerificationScreen
 import com.example.resq.ui.theme.ResQTheme
 
-/** Simple navigation state used before a NavController is wired up. */
-private enum class Screen { LOGIN, REGISTER, HOME }
-
 /**
- * Entry-point activity for the RESQ application.
+ * Alur Navigasi Lengkap sesuai Semua Screenshot:
  *
- * Sets up edge-to-edge display and delegates all UI to Jetpack Compose
- * via [setContent]. The [ResQTheme] wrapper applies Material 3 theming,
- * brand colours, and the Poppins font family across the entire screen tree.
- *
- * Navigation flow: LOGIN ↔ REGISTER → HOME
+ * SPLASH (Depan - layar merah)
+ *   ├─ Sudah login → HOME (Landing Page)
+ *   └─ Belum login → LOGIN
+ *                       ├─ Login sukses → HOME
+ *                       └─ Tap Sign Up → REGISTER
+ *                                           └─ Register sukses → VERIFICATION (email sent dialog)
+ *                                                                   └─ Lanjut → EMERGENCY_CONTACT (step 1→2→3)
+ *                                                                                   └─ Selesai/Skip → HOME
  */
+private enum class Screen {
+    SPLASH,
+    LOGIN,
+    REGISTER,
+    VERIFICATION,
+    EMERGENCY_CONTACT,
+    HOME,
+}
+
 class MainActivity : ComponentActivity() {
+
+    private lateinit var sessionManager: UserSessionManager
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
 
+        sessionManager = UserSessionManager(applicationContext)
+
         setContent {
             ResQTheme {
-                var currentScreen by remember { mutableStateOf(Screen.LOGIN) }
+                var currentScreen by remember { mutableStateOf(Screen.SPLASH) }
+                // Data registrasi sementara untuk diteruskan antar layar
+                var pendingEmail by remember { mutableStateOf("") }
+                var pendingName by remember { mutableStateOf("") }
+                // Step kontak darurat (1, 2, 3)
+                var emergencyContactStep by remember { mutableStateOf(1) }
 
                 when (currentScreen) {
+
+                    // ── 1. SPLASH ─────────────────────────────────────────────────
+                    Screen.SPLASH -> SplashScreen(
+                        durationMillis = 2000L,
+                        onSplashFinished = {
+                            currentScreen = if (sessionManager.isLoggedIn) {
+                                Screen.HOME
+                            } else {
+                                Screen.LOGIN
+                            }
+                        },
+                    )
+
+                    // ── 2. LOGIN ──────────────────────────────────────────────────
                     Screen.LOGIN -> LoginScreen(
                         onLoginClick = { email, _ ->
-                            // TODO: replace with real auth logic
-                            Toast.makeText(this, "Login: $email", Toast.LENGTH_SHORT).show()
+                            sessionManager.saveUserSession(email = email)
+                            Toast.makeText(this, "Login berhasil!", Toast.LENGTH_SHORT).show()
                             currentScreen = Screen.HOME
                         },
                         onNavigateToRegister = { currentScreen = Screen.REGISTER },
                     )
 
+                    // ── 3. REGISTER ───────────────────────────────────────────────
                     Screen.REGISTER -> RegisterScreen(
                         onRegisterClick = { name, email, _ ->
-                            // TODO: replace with real auth logic
-                            Toast.makeText(this, "Daftar: $name ($email)", Toast.LENGTH_SHORT).show()
-                            currentScreen = Screen.LOGIN
+                            pendingEmail = email
+                            pendingName = name
+                            currentScreen = Screen.VERIFICATION
                         },
                         onNavigateToLogin = { currentScreen = Screen.LOGIN },
                     )
 
+                    // ── 4. VERIFICATION ───────────────────────────────────────────
+                    Screen.VERIFICATION -> VerificationScreen(
+                        onDismiss = { currentScreen = Screen.LOGIN },
+                        onResendEmail = {
+                            Toast.makeText(this, "Email verifikasi dikirim ulang!", Toast.LENGTH_SHORT).show()
+                            // Setelah verifikasi, lanjut ke Emergency Contact
+                            emergencyContactStep = 1
+                            currentScreen = Screen.EMERGENCY_CONTACT
+                        },
+                    )
+
+                    // ── 5. EMERGENCY CONTACT (step 1 → 2 → 3) ────────────────────
+                    Screen.EMERGENCY_CONTACT -> EmergencyContactScreen(
+                        contactStep = emergencyContactStep,
+                        onSaveAndContinue = { name, relationship, phone ->
+                            Toast.makeText(
+                                this,
+                                "Kontak $name ($relationship) disimpan",
+                                Toast.LENGTH_SHORT,
+                            ).show()
+                            if (emergencyContactStep < 3) {
+                                emergencyContactStep++
+                            } else {
+                                // Selesai semua kontak → simpan sesi & masuk ke Home
+                                sessionManager.saveUserSession(
+                                    email = pendingEmail,
+                                    name = pendingName,
+                                )
+                                currentScreen = Screen.HOME
+                            }
+                        },
+                        onSkip = {
+                            if (emergencyContactStep < 3) {
+                                emergencyContactStep++
+                            } else {
+                                sessionManager.saveUserSession(
+                                    email = pendingEmail,
+                                    name = pendingName,
+                                )
+                                currentScreen = Screen.HOME
+                            }
+                        },
+                        onDismiss = {
+                            // Jika ditutup dari tengah, langsung ke Home juga
+                            sessionManager.saveUserSession(
+                                email = pendingEmail,
+                                name = pendingName,
+                            )
+                            currentScreen = Screen.HOME
+                        },
+                    )
+
+                    // ── 6. HOME (Landing Page) ────────────────────────────────────
                     Screen.HOME -> HomeScreen(
                         onSosActivated = {
                             Toast.makeText(
@@ -67,9 +157,7 @@ class MainActivity : ComponentActivity() {
                                 Toast.LENGTH_SHORT,
                             ).show()
                         },
-                        onNavItemSelected = { _ ->
-                            // TODO: integrate NavController for multi-screen navigation
-                        },
+                        onNavItemSelected = { },
                         onCommunityFabClick = {
                             Toast.makeText(
                                 this,
