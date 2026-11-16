@@ -22,16 +22,21 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.resq.ui.theme.PoppinsFamily
 import com.example.resq.ui.theme.ResQRed
+import com.example.resq.ui.theme.TextPrimary
 import com.example.resq.ui.theme.TextSecondary
 
 /**
  * RESQ Logo Header matching the reference screenshot:
  * - Red bold "RESQ" brand text.
  * - Red outline location pin icon next to the top right of "Q".
- * - 2-line instruction subtitle in subtle gray.
+ * - In normal state: 2-line instruction subtitle in subtle gray.
+ * - In countdown/holding state: "RELEASE TO CANCEL" in bold dark text.
  */
 @Composable
-fun ResQLogoHeader(modifier: Modifier = Modifier) {
+fun ResQLogoHeader(
+    modifier: Modifier = Modifier,
+    isCountingDown: Boolean = false,
+) {
     Column(
         modifier            = modifier,
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -68,17 +73,31 @@ fun ResQLogoHeader(modifier: Modifier = Modifier) {
             )
         }
 
-        // ── Subtitle text (2 lines, centered) ─────────────────────────────────
-        Text(
-            text = "Press the button below 3 second and emergency\nresponders will reach you immediately",
-            style = MaterialTheme.typography.bodyMedium.copy(
-                fontFamily = PoppinsFamily,
-                fontWeight = FontWeight.Normal,
-                color      = TextSecondary,
-                fontSize   = 12.sp,
-                lineHeight = 18.sp,
-            ),
-            textAlign = TextAlign.Center,
-        )
+        // ── Subtitle text ─────────────────────────────────────────────────────
+        if (isCountingDown) {
+            Text(
+                text = "RELEASE TO CANCEL",
+                style = MaterialTheme.typography.titleMedium.copy(
+                    fontFamily    = PoppinsFamily,
+                    fontWeight    = FontWeight.Bold,
+                    color         = TextPrimary,
+                    fontSize      = 14.sp,
+                    letterSpacing = 0.5.sp,
+                ),
+                textAlign = TextAlign.Center,
+            )
+        } else {
+            Text(
+                text = "Press the button below 3 second and emergency\nresponders will reach you immediately",
+                style = MaterialTheme.typography.bodyMedium.copy(
+                    fontFamily = PoppinsFamily,
+                    fontWeight = FontWeight.Normal,
+                    color      = TextSecondary,
+                    fontSize   = 12.sp,
+                    lineHeight = 18.sp,
+                ),
+                textAlign = TextAlign.Center,
+            )
+        }
     }
 }
