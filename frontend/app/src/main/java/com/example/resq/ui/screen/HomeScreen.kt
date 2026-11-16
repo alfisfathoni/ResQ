@@ -30,7 +30,18 @@ import com.example.resq.ui.theme.ResQTheme
 
 /**
  * Full Homepage screen of the RESQ emergency app.
- * Matches the reference layout, spacing, and visual elements exactly.
+ * Matches both states in the reference screenshot:
+ * 1. Normal state ("Home"):
+ *    - Logo + 2-line instruction subtitle
+ *    - Pulsing "HELP" button with "HOLD 4S" badge
+ *    - Instant Responders grid (Firefighter, Ambulance, Police, Family)
+ *    - Current Address Card
+ *    - Curved Bottom Nav Bar with Center SOS FAB
+ * 2. Holding countdown state ("Count"):
+ *    - Logo + "RELEASE TO CANCEL" in bold dark text
+ *    - Circular countdown progress ring (4s -> 3s -> 2s -> 1s)
+ *    - Release before 4s cancels immediately
+ *    - Bottom nav and responders hidden, Current Address Card kept at bottom
  */
 @Composable
 fun HomeScreen(
@@ -40,6 +51,7 @@ fun HomeScreen(
     onCommunityFabClick : () -> Unit              = {},
 ) {
     var selectedRoute by rememberSaveable { mutableStateOf("home") }
+    var isHoldingSos by remember { mutableStateOf(false) }
 
     Box(
         modifier = Modifier
@@ -51,35 +63,44 @@ fun HomeScreen(
             modifier            = Modifier
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
-                .padding(bottom = 90.dp),
+                .padding(bottom = if (isHoldingSos) 24.dp else 90.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             Spacer(modifier = Modifier.height(28.dp))
 
-            // 1. Header: Logo RESQ + Pin + Subtitle
+            // 1. Header: Logo RESQ + Pin + Subtitle ("RELEASE TO CANCEL" when holding)
             ResQLogoHeader(
-                modifier = Modifier.padding(horizontal = 24.dp),
+                modifier       = Modifier.padding(horizontal = 24.dp),
+                isCountingDown = isHoldingSos,
             )
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            // 2. Main SOS "HELP" Button
+            // 2. Main SOS Button (Switches to Circular Countdown Ring on hold)
             SosButton(
-                holdDurationMs = 4_000L,
-                onActivated    = onSosActivated,
+                holdDurationMs  = 4_000L,
+                onActivated     = onSosActivated,
+                onHoldingChange = { isHolding, _, _ ->
+                    isHoldingSos = isHolding
+                },
             )
 
             Spacer(modifier = Modifier.height(26.dp))
 
-            // 3. Instant Responders Grid (Firefighter, Ambulance, Police, Family)
-            InstantRespondersSection(
-                modifier         = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 18.dp),
-                onResponderClick = onResponderClick,
-            )
+            if (!isHoldingSos) {
+                // 3. Instant Responders Grid (Only shown in normal state)
+                InstantRespondersSection(
+                    modifier         = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 18.dp),
+                    onResponderClick = onResponderClick,
+                )
 
-            Spacer(modifier = Modifier.height(18.dp))
+                Spacer(modifier = Modifier.height(18.dp))
+            } else {
+                // Spacing in countdown mode so Address Card is nicely placed below the ring
+                Spacer(modifier = Modifier.height(60.dp))
+            }
 
             // 4. Current Address Card with status badges
             CurrentAddressCard(
@@ -89,16 +110,18 @@ fun HomeScreen(
             Spacer(modifier = Modifier.height(24.dp))
         }
 
-        // ── Pinned Curved Bottom Nav Bar with Center FAB ──────────────────────
-        ResQBottomNavBar(
-            selectedRoute  = selectedRoute,
-            onItemSelected = { route ->
-                selectedRoute = route
-                onNavItemSelected(route)
-            },
-            onFabClick = onCommunityFabClick,
-            modifier   = Modifier.align(Alignment.BottomCenter),
-        )
+        // ── Pinned Curved Bottom Nav Bar with Center FAB (Hidden in countdown mode) ──
+        if (!isHoldingSos) {
+            ResQBottomNavBar(
+                selectedRoute  = selectedRoute,
+                onItemSelected = { route ->
+                    selectedRoute = route
+                    onNavItemSelected(route)
+                },
+                onFabClick = onCommunityFabClick,
+                modifier   = Modifier.align(Alignment.BottomCenter),
+            )
+        }
     }
 }
 

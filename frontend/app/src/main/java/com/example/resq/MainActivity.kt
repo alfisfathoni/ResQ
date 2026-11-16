@@ -1,5 +1,7 @@
 package com.example.resq
 
+import android.content.Intent
+import android.net.Uri
 import android.os.Bundle
 import android.widget.Toast
 import androidx.activity.ComponentActivity
@@ -146,9 +148,21 @@ class MainActivity : ComponentActivity() {
                         onSosActivated = {
                             Toast.makeText(
                                 this,
-                                "🚨 SOS Activated! Help is on the way.",
+                                "🚨 Demo: Menghubungi Nomor Darurat 112...",
                                 Toast.LENGTH_LONG,
                             ).show()
+                            try {
+                                val dialIntent = Intent(Intent.ACTION_DIAL).apply {
+                                    data = Uri.parse("tel:112")
+                                }
+                                startActivity(dialIntent)
+                            } catch (e: Exception) {
+                                Toast.makeText(
+                                    this,
+                                    "Tidak dapat membuka dialer: ${e.message}",
+                                    Toast.LENGTH_SHORT
+                                ).show()
+                            }
                         },
                         onResponderClick = { responder ->
                             Toast.makeText(
