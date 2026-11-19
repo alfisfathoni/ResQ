@@ -23,3 +23,13 @@ data class ResponderItem(
     val tintColor         : Color,
     val contentDescription: String = label,
 )
+
+/**
+ * Data class for an Emergency Contact entered by the user.
+ */
+data class EmergencyContact(
+    val id          : Int,
+    val name        : String,
+    val relationship: String = "Family",
+    val phone       : String,
+)

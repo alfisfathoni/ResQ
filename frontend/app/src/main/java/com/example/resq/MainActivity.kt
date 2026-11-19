@@ -9,25 +9,28 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.runtime.*
 import com.example.resq.data.UserSessionManager
+import com.example.resq.ui.model.EmergencyContact
 import com.example.resq.ui.screen.EmergencyContactScreen
 import com.example.resq.ui.screen.HomeScreen
 import com.example.resq.ui.screen.LoginScreen
+import com.example.resq.ui.screen.ProfileScreen
 import com.example.resq.ui.screen.RegisterScreen
 import com.example.resq.ui.screen.SplashScreen
 import com.example.resq.ui.screen.VerificationScreen
 import com.example.resq.ui.theme.ResQTheme
 
 /**
- * Alur Navigasi Lengkap sesuai Semua Screenshot:
+ * Alur Navigasi Lengkap:
  *
  * SPLASH (Depan - layar merah)
  *   ├─ Sudah login → HOME (Landing Page)
  *   └─ Belum login → LOGIN
  *                       ├─ Login sukses → HOME
  *                       └─ Tap Sign Up → REGISTER
- *                                           └─ Register sukses → VERIFICATION (email sent dialog)
- *                                                                   └─ Lanjut → EMERGENCY_CONTACT (step 1→2→3)
+ *                                           └─ Register sukses → VERIFICATION
+ *                                                                   └─ Lanjut → EMERGENCY_CONTACT (1→2→3)
  *                                                                                   └─ Selesai/Skip → HOME
+ * HOME ↔ PROFILE (via Bottom Navigation Bar)
  */
 private enum class Screen {
     SPLASH,
@@ -36,6 +39,7 @@ private enum class Screen {
     VERIFICATION,
     EMERGENCY_CONTACT,
     HOME,
+    PROFILE,
 }
 
 class MainActivity : ComponentActivity() {
@@ -96,7 +100,6 @@ class MainActivity : ComponentActivity() {
                         onDismiss = { currentScreen = Screen.LOGIN },
                         onResendEmail = {
                             Toast.makeText(this, "Email verifikasi dikirim ulang!", Toast.LENGTH_SHORT).show()
-                            // Setelah verifikasi, lanjut ke Emergency Contact
                             emergencyContactStep = 1
                             currentScreen = Screen.EMERGENCY_CONTACT
                         },
@@ -106,18 +109,27 @@ class MainActivity : ComponentActivity() {
                     Screen.EMERGENCY_CONTACT -> EmergencyContactScreen(
                         contactStep = emergencyContactStep,
                         onSaveAndContinue = { name, relationship, phone ->
+                            // Simpan kontak ke session
+                            sessionManager.addEmergencyContact(
+                                EmergencyContact(
+                                    id           = emergencyContactStep,
+                                    name         = name,
+                                    relationship = relationship,
+                                    phone        = phone,
+                                )
+                            )
                             Toast.makeText(
                                 this,
                                 "Kontak $name ($relationship) disimpan",
                                 Toast.LENGTH_SHORT,
                             ).show()
+
                             if (emergencyContactStep < 3) {
                                 emergencyContactStep++
                             } else {
-                                // Selesai semua kontak → simpan sesi & masuk ke Home
                                 sessionManager.saveUserSession(
                                     email = pendingEmail,
-                                    name = pendingName,
+                                    name  = pendingName,
                                 )
                                 currentScreen = Screen.HOME
                             }
@@ -128,16 +140,15 @@ class MainActivity : ComponentActivity() {
                             } else {
                                 sessionManager.saveUserSession(
                                     email = pendingEmail,
-                                    name = pendingName,
+                                    name  = pendingName,
                                 )
                                 currentScreen = Screen.HOME
                             }
                         },
                         onDismiss = {
-                            // Jika ditutup dari tengah, langsung ke Home juga
                             sessionManager.saveUserSession(
                                 email = pendingEmail,
-                                name = pendingName,
+                                name  = pendingName,
                             )
                             currentScreen = Screen.HOME
                         },
@@ -171,13 +182,38 @@ class MainActivity : ComponentActivity() {
                                 Toast.LENGTH_SHORT,
                             ).show()
                         },
-                        onNavItemSelected = { },
+                        onNavItemSelected = { route ->
+                            if (route == "profile") {
+                                currentScreen = Screen.PROFILE
+                            }
+                        },
                         onCommunityFabClick = {
                             Toast.makeText(
                                 this,
                                 "Opening Community…",
                                 Toast.LENGTH_SHORT,
                             ).show()
+                        },
+                    )
+
+                    // ── 7. PROFILE (Tampilan Profil) ──────────────────────────────
+                    Screen.PROFILE -> ProfileScreen(
+                        userName          = sessionManager.userName ?: "ForestGump",
+                        userEmail         = sessionManager.userEmail ?: "gumpfor@gmail.com",
+                        userPhone         = sessionManager.userPhone ?: "+62 89507274535",
+                        emergencyContacts = sessionManager.getEmergencyContacts(),
+                        onAddContactClick = {
+                            val nextStep = (sessionManager.getEmergencyContacts().size + 1).coerceAtMost(3)
+                            emergencyContactStep = nextStep
+                            currentScreen = Screen.EMERGENCY_CONTACT
+                        },
+                        onNavigateToHome  = {
+                            currentScreen = Screen.HOME
+                        },
+                        onLogout          = {
+                            sessionManager.clearSession()
+                            Toast.makeText(this, "Berhasil logout", Toast.LENGTH_SHORT).show()
+                            currentScreen = Screen.LOGIN
                         },
                     )
                 }
