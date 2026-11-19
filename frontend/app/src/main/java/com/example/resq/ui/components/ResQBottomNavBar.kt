@@ -16,10 +16,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.AccountCircle
 import androidx.compose.material.icons.outlined.Assignment
 import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.LocationOn
-import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material.icons.rounded.Groups
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -45,15 +45,15 @@ val DefaultNavItems = listOf(
     NavItem("home",    "Home",   Icons.Outlined.Home),
     NavItem("map",     "Map",    Icons.Outlined.LocationOn),
     NavItem("report",  "Report", Icons.Outlined.Assignment),
-    NavItem("profile", "Profile", Icons.Outlined.Person),
+    NavItem("profile", "Profile", Icons.Outlined.AccountCircle),
 )
 
 /**
  * Curved Bottom Navigation Bar with a cradle dip in the center for the FAB:
  * - White background with a smooth scooped curve notch in the center.
  * - Central circular red floating action button (FAB) with Groups icon.
- * - Active tab: "Home" (Red icon + Red label).
- * - Other tabs: "Map", "Report", "Profile" (Dark gray icon + Dark gray label).
+ * - Active tab: Red icon + Red label (NavActiveRed #F03738).
+ * - Inactive tabs: Dark gray icon + Dark gray label (NavInactiveDark #1F2937).
  */
 @Composable
 fun ResQBottomNavBar(

@@ -86,7 +86,7 @@ fun ProfileScreen(
     userPhone         : String                 = "+62 89507274535",
     emergencyContacts : List<EmergencyContact> = emptyList(),
     onAddContactClick : () -> Unit             = {},
-    onNavigateToHome  : () -> Unit             = {},
+    onNavItemSelected : (String) -> Unit        = {},
     onLogout          : () -> Unit             = {},
 ) {
     val context = LocalContext.current
@@ -174,15 +174,11 @@ fun ProfileScreen(
             Spacer(modifier = Modifier.height(16.dp))
         }
 
-        // ── Pinned Curved Bottom Nav Bar ──────────────────────────────────────
+        // ── Pinned Curved Bottom Nav Bar (Active on "profile" -> RED) ────────
         ResQBottomNavBar(
             selectedRoute  = "profile",
-            onItemSelected = { route ->
-                if (route == "home") {
-                    onNavigateToHome()
-                }
-            },
-            modifier = Modifier.align(Alignment.BottomCenter),
+            onItemSelected = onNavItemSelected,
+            modifier       = Modifier.align(Alignment.BottomCenter),
         )
     }
 }

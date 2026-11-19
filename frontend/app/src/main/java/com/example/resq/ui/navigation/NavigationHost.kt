@@ -8,6 +8,8 @@ interface NavigationHost {
     fun navigateToSplash()
     fun navigateToAuth()
     fun navigateToHome()
+    fun navigateToMap()
+    fun navigateToReport()
     fun navigateToProfile()
     fun navigateToEmergencyContact(step: Int)
 }

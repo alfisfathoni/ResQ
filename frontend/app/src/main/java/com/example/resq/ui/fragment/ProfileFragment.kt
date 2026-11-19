@@ -15,7 +15,7 @@ import com.example.resq.ui.theme.ResQTheme
 
 /**
  * Fragment hosting the User Profile Screen with dynamic Emergency Contacts list
- * (powered by RecyclerView & EmergencyContactAdapter).
+ * and full bottom navbar routing (active on "profile").
  */
 class ProfileFragment : Fragment() {
 
@@ -46,8 +46,13 @@ class ProfileFragment : Fragment() {
                             val nextStep = (sessionManager.getEmergencyContacts().size + 1).coerceAtMost(3)
                             navHost?.navigateToEmergencyContact(nextStep)
                         },
-                        onNavigateToHome  = {
-                            navHost?.navigateToHome()
+                        onNavItemSelected = { route ->
+                            when (route) {
+                                "home"    -> navHost?.navigateToHome()
+                                "map"     -> navHost?.navigateToMap()
+                                "report"  -> navHost?.navigateToReport()
+                                "profile" -> { /* already on profile */ }
+                            }
                         },
                         onLogout          = {
                             sessionManager.clearSession()

@@ -6,7 +6,9 @@ import androidx.fragment.app.Fragment
 import androidx.fragment.app.commit
 import com.example.resq.ui.fragment.AuthFragment
 import com.example.resq.ui.fragment.HomeFragment
+import com.example.resq.ui.fragment.MapFragment
 import com.example.resq.ui.fragment.ProfileFragment
+import com.example.resq.ui.fragment.ReportFragment
 import com.example.resq.ui.fragment.SplashFragment
 import com.example.resq.ui.navigation.NavigationHost
 
@@ -15,6 +17,8 @@ import com.example.resq.ui.navigation.NavigationHost
  * - SplashFragment
  * - AuthFragment (Login, Register, Verification, Emergency Contacts)
  * - HomeFragment (Interactive SOS button & Responders)
+ * - MapFragment (Radar & Emergency Maps)
+ * - ReportFragment (Emergency Reports & History)
  * - ProfileFragment (Profile, RecyclerView Emergency Contacts list, Help, Logout)
  */
 class MainActivity : AppCompatActivity(), NavigationHost {
@@ -38,6 +42,14 @@ class MainActivity : AppCompatActivity(), NavigationHost {
 
     override fun navigateToHome() {
         replaceFragment(HomeFragment(), addToBackStack = false)
+    }
+
+    override fun navigateToMap() {
+        replaceFragment(MapFragment(), addToBackStack = false)
+    }
+
+    override fun navigateToReport() {
+        replaceFragment(ReportFragment(), addToBackStack = false)
     }
 
     override fun navigateToProfile() {

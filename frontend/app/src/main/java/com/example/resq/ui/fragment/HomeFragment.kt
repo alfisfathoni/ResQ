@@ -58,8 +58,11 @@ class HomeFragment : Fragment() {
                             ).show()
                         },
                         onNavItemSelected = { route ->
-                            if (route == "profile") {
-                                navHost?.navigateToProfile()
+                            when (route) {
+                                "home"    -> { /* already on home */ }
+                                "map"     -> navHost?.navigateToMap()
+                                "report"  -> navHost?.navigateToReport()
+                                "profile" -> navHost?.navigateToProfile()
                             }
                         },
                         onCommunityFabClick = {
