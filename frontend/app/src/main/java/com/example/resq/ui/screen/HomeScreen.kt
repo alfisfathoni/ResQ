@@ -23,25 +23,39 @@ import com.example.resq.ui.components.CurrentAddressCard
 import com.example.resq.ui.components.InstantRespondersSection
 import com.example.resq.ui.components.ResQBottomNavBar
 import com.example.resq.ui.components.ResQLogoHeader
+import com.example.resq.ui.components.SlideToCancel
+import com.example.resq.ui.components.SosActiveContactsCard
 import com.example.resq.ui.components.SosButton
 import com.example.resq.ui.model.ResponderItem
 import com.example.resq.ui.theme.BackgroundLight
 import com.example.resq.ui.theme.ResQTheme
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 /**
- * Full Homepage screen of the RESQ emergency app.
- * Matches both states in the reference screenshot:
- * 1. Normal state ("Home"):
+ * Full Homepage screen of the RESQ emergency app supporting 3 states:
+ *
+ * 1. Normal State ("Home"):
  *    - Logo + 2-line instruction subtitle
- *    - Pulsing "HELP" button with "HOLD 4S" badge
+ *    - Pulsing "HELP" button with "HOLD 3S" badge
  *    - Instant Responders grid (Firefighter, Ambulance, Police, Family)
  *    - Current Address Card
  *    - Curved Bottom Nav Bar with Center SOS FAB
- * 2. Holding countdown state ("Count"):
+ *
+ * 2. Holding Countdown State ("Count"):
  *    - Logo + "RELEASE TO CANCEL" in bold dark text
- *    - Circular countdown progress ring (4s -> 3s -> 2s -> 1s)
- *    - Release before 4s cancels immediately
- *    - Bottom nav and responders hidden, Current Address Card kept at bottom
+ *    - Circular countdown progress ring (3s -> 2s -> 1s)
+ *    - Release before 3s cancels immediately
+ *    - Responders and bottom bar hidden, Current Address Card kept at bottom
+ *
+ * 3. Active State ("SOS Aktif" - screenshot reference):
+ *    - Concentric pulsing rings with "SOS" and green "ON" badge
+ *    - 3 overlapping contact avatars
+ *    - "Contact sent to 3 emergency contacts at HH:mm" card
+ *    - "Slide to cancel" interactive slider
+ *    - Current Address Card
+ *    - Bottom Nav Bar
  */
 @Composable
 fun HomeScreen(
@@ -52,6 +66,8 @@ fun HomeScreen(
 ) {
     var selectedRoute by rememberSaveable { mutableStateOf("home") }
     var isHoldingSos by remember { mutableStateOf(false) }
+    var isSosActive by rememberSaveable { mutableStateOf(false) }
+    var activationTime by rememberSaveable { mutableStateOf("09:41") }
 
     Box(
         modifier = Modifier
@@ -63,43 +79,82 @@ fun HomeScreen(
             modifier            = Modifier
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
-                .padding(bottom = if (isHoldingSos) 24.dp else 90.dp),
+                .padding(bottom = if (isHoldingSos && !isSosActive) 24.dp else 90.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             Spacer(modifier = Modifier.height(28.dp))
 
-            // 1. Header: Logo RESQ + Pin + Subtitle ("RELEASE TO CANCEL" when holding)
+            // 1. Header Logo
             ResQLogoHeader(
                 modifier       = Modifier.padding(horizontal = 24.dp),
                 isCountingDown = isHoldingSos,
+                showSubtitle   = !isSosActive, // Subtitle hidden in SOS Aktif state
             )
 
-            Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(if (isSosActive) 14.dp else 24.dp))
 
-            // 2. Main SOS Button (Switches to Circular Countdown Ring on hold)
+            // 2. Central SOS Button (Normal HELP / Countdown Ring / Concentric SOS ON)
             SosButton(
-                holdDurationMs  = 4_000L,
-                onActivated     = onSosActivated,
+                holdDurationMs  = 3_000L,
+                isSosActive     = isSosActive,
+                onActivated     = {
+                    isSosActive = true
+                    try {
+                        val sdf = SimpleDateFormat("HH:mm", Locale.getDefault())
+                        activationTime = sdf.format(Date())
+                    } catch (_: Exception) {
+                        activationTime = "09:41"
+                    }
+                    onSosActivated()
+                },
                 onHoldingChange = { isHolding, _, _ ->
                     isHoldingSos = isHolding
                 },
             )
 
-            Spacer(modifier = Modifier.height(26.dp))
+            when {
+                // ── State 3: SOS Aktif ─────────────────────────────────────────
+                isSosActive -> {
+                    Spacer(modifier = Modifier.height(14.dp))
 
-            if (!isHoldingSos) {
-                // 3. Instant Responders Grid (Only shown in normal state)
-                InstantRespondersSection(
-                    modifier         = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 18.dp),
-                    onResponderClick = onResponderClick,
-                )
+                    // Contact notification card with 3 overlapping avatars
+                    SosActiveContactsCard(
+                        sentTime = activationTime,
+                        modifier = Modifier.padding(horizontal = 24.dp),
+                    )
 
-                Spacer(modifier = Modifier.height(18.dp))
-            } else {
-                // Spacing in countdown mode so Address Card is nicely placed below the ring
-                Spacer(modifier = Modifier.height(60.dp))
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    // "Slide to cancel" slider
+                    SlideToCancel(
+                        modifier    = Modifier.padding(horizontal = 24.dp),
+                        onCancelled = {
+                            isSosActive = false
+                        },
+                    )
+
+                    Spacer(modifier = Modifier.height(16.dp))
+                }
+
+                // ── State 2: Countdown ─────────────────────────────────────────
+                isHoldingSos -> {
+                    Spacer(modifier = Modifier.height(60.dp))
+                }
+
+                // ── State 1: Normal Home ───────────────────────────────────────
+                else -> {
+                    Spacer(modifier = Modifier.height(26.dp))
+
+                    // Instant Responders Grid (Firefighter, Ambulance, Police, Family)
+                    InstantRespondersSection(
+                        modifier         = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 18.dp),
+                        onResponderClick = onResponderClick,
+                    )
+
+                    Spacer(modifier = Modifier.height(18.dp))
+                }
             }
 
             // 4. Current Address Card with status badges
@@ -110,8 +165,9 @@ fun HomeScreen(
             Spacer(modifier = Modifier.height(24.dp))
         }
 
-        // ── Pinned Curved Bottom Nav Bar with Center FAB (Hidden in countdown mode) ──
-        if (!isHoldingSos) {
+        // ── Pinned Curved Bottom Nav Bar with Center FAB ──────────────────────
+        // Hidden only during countdown hold gesture; visible in Normal & SOS Aktif states
+        if (!isHoldingSos || isSosActive) {
             ResQBottomNavBar(
                 selectedRoute  = selectedRoute,
                 onItemSelected = { route ->
