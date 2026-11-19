@@ -26,16 +26,17 @@ import com.example.resq.ui.theme.TextPrimary
 import com.example.resq.ui.theme.TextSecondary
 
 /**
- * RESQ Logo Header matching the reference screenshot:
- * - Red bold "RESQ" brand text.
- * - Red outline location pin icon next to the top right of "Q".
+ * RESQ Logo Header matching the reference screenshots:
+ * - Red bold "RESQ" brand text with outline location pin icon on "Q".
  * - In normal state: 2-line instruction subtitle in subtle gray.
  * - In countdown/holding state: "RELEASE TO CANCEL" in bold dark text.
+ * - In SOS active state: subtitle is hidden ([showSubtitle] = false).
  */
 @Composable
 fun ResQLogoHeader(
-    modifier: Modifier = Modifier,
-    isCountingDown: Boolean = false,
+    modifier       : Modifier = Modifier,
+    isCountingDown : Boolean  = false,
+    showSubtitle   : Boolean  = true,
 ) {
     Column(
         modifier            = modifier,
@@ -74,30 +75,32 @@ fun ResQLogoHeader(
         }
 
         // ── Subtitle text ─────────────────────────────────────────────────────
-        if (isCountingDown) {
-            Text(
-                text = "RELEASE TO CANCEL",
-                style = MaterialTheme.typography.titleMedium.copy(
-                    fontFamily    = PoppinsFamily,
-                    fontWeight    = FontWeight.Bold,
-                    color         = TextPrimary,
-                    fontSize      = 14.sp,
-                    letterSpacing = 0.5.sp,
-                ),
-                textAlign = TextAlign.Center,
-            )
-        } else {
-            Text(
-                text = "Press the button below 3 second and emergency\nresponders will reach you immediately",
-                style = MaterialTheme.typography.bodyMedium.copy(
-                    fontFamily = PoppinsFamily,
-                    fontWeight = FontWeight.Normal,
-                    color      = TextSecondary,
-                    fontSize   = 12.sp,
-                    lineHeight = 18.sp,
-                ),
-                textAlign = TextAlign.Center,
-            )
+        if (showSubtitle) {
+            if (isCountingDown) {
+                Text(
+                    text = "RELEASE TO CANCEL",
+                    style = MaterialTheme.typography.titleMedium.copy(
+                        fontFamily    = PoppinsFamily,
+                        fontWeight    = FontWeight.Bold,
+                        color         = TextPrimary,
+                        fontSize      = 14.sp,
+                        letterSpacing = 0.5.sp,
+                    ),
+                    textAlign = TextAlign.Center,
+                )
+            } else {
+                Text(
+                    text = "Press the button below 3 second and emergency\nresponders will reach you immediately",
+                    style = MaterialTheme.typography.bodyMedium.copy(
+                        fontFamily = PoppinsFamily,
+                        fontWeight = FontWeight.Normal,
+                        color      = TextSecondary,
+                        fontSize   = 12.sp,
+                        lineHeight = 18.sp,
+                    ),
+                    textAlign = TextAlign.Center,
+                )
+            }
         }
     }
 }
