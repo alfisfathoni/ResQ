@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:layout_marginBottom="8dp"
+    android:background="@drawable/bg_contact_item"
+    android:gravity="center_vertical"
+    android:orientation="horizontal"
+    android:paddingStart="10dp"
+    android:paddingTop="8dp"
+    android:paddingEnd="10dp"
+    android:paddingBottom="8dp">
+
+    <!-- Nomor Urut (1, 2, 3) -->
+    <TextView
+        android:id="@+id/tv_contact_number"
+        android:layout_width="24dp"
+        android:layout_height="24dp"
+        android:background="@drawable/bg_number_circle"
+        android:gravity="center"
+        android:text="1"
+        android:textColor="#1E2022"
+        android:textSize="12sp"
+        android:textStyle="bold" />
+
+    <!-- Info Nama & Nomor Kontak -->
+    <LinearLayout
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:orientation="vertical"
+        android:paddingStart="10dp"
+        android:paddingEnd="8dp">
+
+        <TextView
+            android:id="@+id/tv_contact_name"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:ellipsize="end"
+            android:maxLines="1"
+            android:text="Bapak"
+            android:textColor="#1E2022"
+            android:textSize="13sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/tv_contact_phone"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:ellipsize="end"
+            android:maxLines="1"
+            android:text="+62 89507274535"
+            android:textColor="#6B7280"
+            android:textSize="11sp" />
+    </LinearLayout>
+
+    <!-- Badge Hijau Auto Telp/SMS -->
+    <TextView
+        android:id="@+id/tv_badge_auto"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:background="@drawable/bg_auto_badge"
+        android:paddingStart="8dp"
+        android:paddingTop="3dp"
+        android:paddingEnd="8dp"
+        android:paddingBottom="3dp"
+        android:text="Auto Telp/SMS"
+        android:textColor="#FFFFFF"
+        android:textSize="9sp"
+        android:textStyle="bold" />
+
+    <!-- Tombol Telepon Merah -->
+    <ImageView
+        android:id="@+id/btn_call_contact"
+        android:layout_width="26dp"
+        android:layout_height="26dp"
+        android:layout_marginStart="8dp"
+        android:background="@drawable/bg_number_circle"
+        android:contentDescription="Call Contact"
+        android:padding="5dp"
+        android:src="@drawable/ic_call_red" />
+
+</LinearLayout>

@@ -47,6 +47,10 @@ dependencies {
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.activity.compose)
 
+    // Fragments & RecyclerView (Finpro Architecture Requirements)
+    implementation("androidx.fragment:fragment-ktx:1.5.4")
+    implementation("androidx.recyclerview:recyclerview:1.2.1")
+
     // Compose BOM
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.compose.ui)
@@ -56,7 +60,7 @@ dependencies {
     implementation(libs.androidx.compose.material.icons.extended)
     implementation(libs.androidx.lifecycle.runtime.compose)
 
-    // Legacy (keep if needed)
+    // Legacy / Material
     implementation(libs.androidx.appcompat)
     implementation(libs.material)
 

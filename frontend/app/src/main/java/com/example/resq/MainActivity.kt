@@ -1,222 +1,59 @@
 package com.example.resq
 
-import android.content.Intent
-import android.net.Uri
 import android.os.Bundle
-import android.widget.Toast
-import androidx.activity.ComponentActivity
-import androidx.activity.compose.setContent
-import androidx.activity.enableEdgeToEdge
-import androidx.compose.runtime.*
-import com.example.resq.data.UserSessionManager
-import com.example.resq.ui.model.EmergencyContact
-import com.example.resq.ui.screen.EmergencyContactScreen
-import com.example.resq.ui.screen.HomeScreen
-import com.example.resq.ui.screen.LoginScreen
-import com.example.resq.ui.screen.ProfileScreen
-import com.example.resq.ui.screen.RegisterScreen
-import com.example.resq.ui.screen.SplashScreen
-import com.example.resq.ui.screen.VerificationScreen
-import com.example.resq.ui.theme.ResQTheme
+import androidx.appcompat.app.AppCompatActivity
+import androidx.fragment.app.Fragment
+import androidx.fragment.app.commit
+import com.example.resq.ui.fragment.AuthFragment
+import com.example.resq.ui.fragment.HomeFragment
+import com.example.resq.ui.fragment.ProfileFragment
+import com.example.resq.ui.fragment.SplashFragment
+import com.example.resq.ui.navigation.NavigationHost
 
 /**
- * Alur Navigasi Lengkap:
- *
- * SPLASH (Depan - layar merah)
- *   ├─ Sudah login → HOME (Landing Page)
- *   └─ Belum login → LOGIN
- *                       ├─ Login sukses → HOME
- *                       └─ Tap Sign Up → REGISTER
- *                                           └─ Register sukses → VERIFICATION
- *                                                                   └─ Lanjut → EMERGENCY_CONTACT (1→2→3)
- *                                                                                   └─ Selesai/Skip → HOME
- * HOME ↔ PROFILE (via Bottom Navigation Bar)
+ * Main Activity acting purely as the Host for UI Fragments:
+ * - SplashFragment
+ * - AuthFragment (Login, Register, Verification, Emergency Contacts)
+ * - HomeFragment (Interactive SOS button & Responders)
+ * - ProfileFragment (Profile, RecyclerView Emergency Contacts list, Help, Logout)
  */
-private enum class Screen {
-    SPLASH,
-    LOGIN,
-    REGISTER,
-    VERIFICATION,
-    EMERGENCY_CONTACT,
-    HOME,
-    PROFILE,
-}
-
-class MainActivity : ComponentActivity() {
-
-    private lateinit var sessionManager: UserSessionManager
+class MainActivity : AppCompatActivity(), NavigationHost {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        enableEdgeToEdge()
+        setContentView(R.layout.activity_main)
 
-        sessionManager = UserSessionManager(applicationContext)
+        if (savedInstanceState == null) {
+            replaceFragment(SplashFragment(), addToBackStack = false)
+        }
+    }
 
-        setContent {
-            ResQTheme {
-                var currentScreen by remember { mutableStateOf(Screen.SPLASH) }
-                // Data registrasi sementara untuk diteruskan antar layar
-                var pendingEmail by remember { mutableStateOf("") }
-                var pendingName by remember { mutableStateOf("") }
-                // Step kontak darurat (1, 2, 3)
-                var emergencyContactStep by remember { mutableStateOf(1) }
+    override fun navigateToSplash() {
+        replaceFragment(SplashFragment(), addToBackStack = false)
+    }
 
-                when (currentScreen) {
+    override fun navigateToAuth() {
+        replaceFragment(AuthFragment(), addToBackStack = false)
+    }
 
-                    // ── 1. SPLASH ─────────────────────────────────────────────────
-                    Screen.SPLASH -> SplashScreen(
-                        durationMillis = 2000L,
-                        onSplashFinished = {
-                            currentScreen = if (sessionManager.isLoggedIn) {
-                                Screen.HOME
-                            } else {
-                                Screen.LOGIN
-                            }
-                        },
-                    )
+    override fun navigateToHome() {
+        replaceFragment(HomeFragment(), addToBackStack = false)
+    }
 
-                    // ── 2. LOGIN ──────────────────────────────────────────────────
-                    Screen.LOGIN -> LoginScreen(
-                        onLoginClick = { email, _ ->
-                            sessionManager.saveUserSession(email = email)
-                            Toast.makeText(this, "Login berhasil!", Toast.LENGTH_SHORT).show()
-                            currentScreen = Screen.HOME
-                        },
-                        onNavigateToRegister = { currentScreen = Screen.REGISTER },
-                    )
+    override fun navigateToProfile() {
+        replaceFragment(ProfileFragment(), addToBackStack = false)
+    }
 
-                    // ── 3. REGISTER ───────────────────────────────────────────────
-                    Screen.REGISTER -> RegisterScreen(
-                        onRegisterClick = { name, email, _ ->
-                            pendingEmail = email
-                            pendingName = name
-                            currentScreen = Screen.VERIFICATION
-                        },
-                        onNavigateToLogin = { currentScreen = Screen.LOGIN },
-                    )
+    override fun navigateToEmergencyContact(step: Int) {
+        replaceFragment(AuthFragment.newInstance(step), addToBackStack = true)
+    }
 
-                    // ── 4. VERIFICATION ───────────────────────────────────────────
-                    Screen.VERIFICATION -> VerificationScreen(
-                        onDismiss = { currentScreen = Screen.LOGIN },
-                        onResendEmail = {
-                            Toast.makeText(this, "Email verifikasi dikirim ulang!", Toast.LENGTH_SHORT).show()
-                            emergencyContactStep = 1
-                            currentScreen = Screen.EMERGENCY_CONTACT
-                        },
-                    )
-
-                    // ── 5. EMERGENCY CONTACT (step 1 → 2 → 3) ────────────────────
-                    Screen.EMERGENCY_CONTACT -> EmergencyContactScreen(
-                        contactStep = emergencyContactStep,
-                        onSaveAndContinue = { name, relationship, phone ->
-                            // Simpan kontak ke session
-                            sessionManager.addEmergencyContact(
-                                EmergencyContact(
-                                    id           = emergencyContactStep,
-                                    name         = name,
-                                    relationship = relationship,
-                                    phone        = phone,
-                                )
-                            )
-                            Toast.makeText(
-                                this,
-                                "Kontak $name ($relationship) disimpan",
-                                Toast.LENGTH_SHORT,
-                            ).show()
-
-                            if (emergencyContactStep < 3) {
-                                emergencyContactStep++
-                            } else {
-                                sessionManager.saveUserSession(
-                                    email = pendingEmail,
-                                    name  = pendingName,
-                                )
-                                currentScreen = Screen.HOME
-                            }
-                        },
-                        onSkip = {
-                            if (emergencyContactStep < 3) {
-                                emergencyContactStep++
-                            } else {
-                                sessionManager.saveUserSession(
-                                    email = pendingEmail,
-                                    name  = pendingName,
-                                )
-                                currentScreen = Screen.HOME
-                            }
-                        },
-                        onDismiss = {
-                            sessionManager.saveUserSession(
-                                email = pendingEmail,
-                                name  = pendingName,
-                            )
-                            currentScreen = Screen.HOME
-                        },
-                    )
-
-                    // ── 6. HOME (Landing Page) ────────────────────────────────────
-                    Screen.HOME -> HomeScreen(
-                        onSosActivated = {
-                            Toast.makeText(
-                                this,
-                                "🚨 Demo: Menghubungi Nomor Darurat 112...",
-                                Toast.LENGTH_LONG,
-                            ).show()
-                            try {
-                                val dialIntent = Intent(Intent.ACTION_DIAL).apply {
-                                    data = Uri.parse("tel:112")
-                                }
-                                startActivity(dialIntent)
-                            } catch (e: Exception) {
-                                Toast.makeText(
-                                    this,
-                                    "Tidak dapat membuka dialer: ${e.message}",
-                                    Toast.LENGTH_SHORT
-                                ).show()
-                            }
-                        },
-                        onResponderClick = { responder ->
-                            Toast.makeText(
-                                this,
-                                "Calling ${responder.label}…",
-                                Toast.LENGTH_SHORT,
-                            ).show()
-                        },
-                        onNavItemSelected = { route ->
-                            if (route == "profile") {
-                                currentScreen = Screen.PROFILE
-                            }
-                        },
-                        onCommunityFabClick = {
-                            Toast.makeText(
-                                this,
-                                "Opening Community…",
-                                Toast.LENGTH_SHORT,
-                            ).show()
-                        },
-                    )
-
-                    // ── 7. PROFILE (Tampilan Profil) ──────────────────────────────
-                    Screen.PROFILE -> ProfileScreen(
-                        userName          = sessionManager.userName ?: "ForestGump",
-                        userEmail         = sessionManager.userEmail ?: "gumpfor@gmail.com",
-                        userPhone         = sessionManager.userPhone ?: "+62 89507274535",
-                        emergencyContacts = sessionManager.getEmergencyContacts(),
-                        onAddContactClick = {
-                            val nextStep = (sessionManager.getEmergencyContacts().size + 1).coerceAtMost(3)
-                            emergencyContactStep = nextStep
-                            currentScreen = Screen.EMERGENCY_CONTACT
-                        },
-                        onNavigateToHome  = {
-                            currentScreen = Screen.HOME
-                        },
-                        onLogout          = {
-                            sessionManager.clearSession()
-                            Toast.makeText(this, "Berhasil logout", Toast.LENGTH_SHORT).show()
-                            currentScreen = Screen.LOGIN
-                        },
-                    )
-                }
+    private fun replaceFragment(fragment: Fragment, addToBackStack: Boolean) {
+        supportFragmentManager.commit {
+            setReorderingAllowed(true)
+            replace(R.id.fragment_container, fragment)
+            if (addToBackStack) {
+                addToBackStack(null)
             }
         }
     }
