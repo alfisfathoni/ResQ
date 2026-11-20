@@ -23,7 +23,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.filled.Logout
-import androidx.compose.material.icons.filled.Call
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.HeadsetMic
@@ -56,6 +55,10 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.viewinterop.AndroidView
+import androidx.recyclerview.widget.LinearLayoutManager
+import androidx.recyclerview.widget.RecyclerView
+import com.example.resq.ui.adapter.EmergencyContactAdapter
 import com.example.resq.ui.components.ResQBottomNavBar
 import com.example.resq.ui.model.EmergencyContact
 import com.example.resq.ui.theme.BackgroundLight
@@ -69,7 +72,7 @@ import com.example.resq.ui.theme.TextSecondary
  * Profile Screen matching the reference design:
  * - Red curved header with avatar & online badge.
  * - Profile card: Name, Email, Phone, and Edit button.
- * - Emergency Contact (SOS) section with dynamic list:
+ * - Emergency Contact (SOS) section with RecyclerView & EmergencyContactAdapter:
  *   shows contacts entered during registration / onboarding, or empty state if none yet.
  * - Security and Verification card (PIN).
  * - Help & Support card with 3 action items.
@@ -83,7 +86,8 @@ fun ProfileScreen(
     userPhone         : String                 = "+62 89507274535",
     emergencyContacts : List<EmergencyContact> = emptyList(),
     onAddContactClick : () -> Unit             = {},
-    onNavigateToHome  : () -> Unit             = {},
+    onNavItemSelected : (String) -> Unit        = {},
+    onCommunityFabClick : () -> Unit           = {},
     onLogout          : () -> Unit             = {},
 ) {
     val context = LocalContext.current
@@ -108,7 +112,7 @@ fun ProfileScreen(
 
             Spacer(modifier = Modifier.height(18.dp))
 
-            // ── 2. Emergency Contact (SOS) Card ───────────────────────────────
+            // ── 2. Emergency Contact (SOS) Card with RecyclerView ─────────────
             EmergencyContactSection(
                 contacts          = emergencyContacts,
                 onAddContactClick = onAddContactClick,
@@ -171,15 +175,12 @@ fun ProfileScreen(
             Spacer(modifier = Modifier.height(16.dp))
         }
 
-        // ── Pinned Curved Bottom Nav Bar ──────────────────────────────────────
+        // ── Pinned Curved Bottom Nav Bar (Active on "profile" -> RED) ────────
         ResQBottomNavBar(
             selectedRoute  = "profile",
-            onItemSelected = { route ->
-                if (route == "home") {
-                    onNavigateToHome()
-                }
-            },
-            modifier = Modifier.align(Alignment.BottomCenter),
+            onItemSelected = onNavItemSelected,
+            onFabClick     = onCommunityFabClick,
+            modifier       = Modifier.align(Alignment.BottomCenter),
         )
     }
 }
@@ -441,7 +442,7 @@ private fun EmergencyContactSection(
 
             Spacer(modifier = Modifier.height(14.dp))
 
-            // Contact List or Empty State
+            // Contact List via RecyclerView or Empty State
             if (contacts.isEmpty()) {
                 Box(
                     modifier = Modifier
@@ -462,120 +463,23 @@ private fun EmergencyContactSection(
                     )
                 }
             } else {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    contacts.forEachIndexed { index, contact ->
-                        ContactItemRow(
-                            index         = index + 1,
-                            name          = contact.name,
-                            phone         = contact.phone,
-                            onCallClicked = { onCallContact(contact.phone) },
-                        )
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun ContactItemRow(
-    index         : Int,
-    name          : String,
-    phone         : String,
-    onCallClicked : () -> Unit,
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
-            .background(Color(0xFFF3F4F6))
-            .padding(horizontal = 10.dp, vertical = 8.dp),
-        verticalAlignment     = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween,
-    ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier          = Modifier.weight(1f),
-        ) {
-            // Number Circle
-            Box(
-                modifier = Modifier
-                    .size(24.dp)
-                    .background(Color.White, CircleShape),
-                contentAlignment = Alignment.Center,
-            ) {
-                Text(
-                    text       = index.toString(),
-                    fontFamily = PoppinsFamily,
-                    fontWeight = FontWeight.Bold,
-                    fontSize   = 12.sp,
-                    color      = TextPrimary,
+                // Official RecyclerView & Custom Adapter implementation
+                AndroidView(
+                    modifier = Modifier.fillMaxWidth(),
+                    factory = { ctx ->
+                        RecyclerView(ctx).apply {
+                            layoutManager = LinearLayoutManager(ctx)
+                            isNestedScrollingEnabled = false
+                            adapter = EmergencyContactAdapter(
+                                contacts = contacts,
+                                onCallClick = { contact -> onCallContact(contact.phone) },
+                            )
+                        }
+                    },
+                    update = { recyclerView ->
+                        (recyclerView.adapter as? EmergencyContactAdapter)?.updateContacts(contacts)
+                    },
                 )
-            }
-
-            Spacer(modifier = Modifier.width(10.dp))
-
-            Column {
-                Text(
-                    text       = name,
-                    fontFamily = PoppinsFamily,
-                    fontWeight = FontWeight.Bold,
-                    fontSize   = 13.sp,
-                    color      = TextPrimary,
-                    maxLines   = 1,
-                    overflow   = TextOverflow.Ellipsis,
-                )
-                Text(
-                    text       = phone,
-                    fontFamily = PoppinsFamily,
-                    fontWeight = FontWeight.Normal,
-                    fontSize   = 11.sp,
-                    color      = TextSecondary,
-                    maxLines   = 1,
-                    overflow   = TextOverflow.Ellipsis,
-                )
-            }
-        }
-
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            // Green Pill Badge "Auto Telp/SMS"
-            Box(
-                modifier = Modifier
-                    .background(BadgeGreenSolid, RoundedCornerShape(50))
-                    .padding(horizontal = 8.dp, vertical = 3.dp),
-                contentAlignment = Alignment.Center,
-            ) {
-                Text(
-                    text       = "Auto Telp/SMS",
-                    fontFamily = PoppinsFamily,
-                    fontWeight = FontWeight.Bold,
-                    fontSize   = 9.sp,
-                    color      = Color.White,
-                )
-            }
-
-            Spacer(modifier = Modifier.width(8.dp))
-
-            // White Circular Call Button
-            Surface(
-                shape           = CircleShape,
-                color           = Color.White,
-                shadowElevation = 1.dp,
-                modifier        = Modifier
-                    .size(26.dp)
-                    .clickable { onCallClicked() },
-            ) {
-                Box(
-                    contentAlignment = Alignment.Center,
-                    modifier         = Modifier.fillMaxSize(),
-                ) {
-                    Icon(
-                        imageVector        = Icons.Default.Call,
-                        contentDescription = "Panggil",
-                        tint               = ResQRed,
-                        modifier           = Modifier.size(13.dp),
-                    )
-                }
             }
         }
     }

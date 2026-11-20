@@ -1,0 +1,16 @@
+package com.example.resq.ui.navigation
+
+/**
+ * Interface implemented by MainActivity to allow Fragments
+ * to request navigation to other screens/fragments cleanly.
+ */
+interface NavigationHost {
+    fun navigateToSplash()
+    fun navigateToAuth()
+    fun navigateToHome()
+    fun navigateToMap()
+    fun navigateToReport()
+    fun navigateToProfile()
+    fun navigateToCompanion()
+    fun navigateToEmergencyContact(step: Int)
+}

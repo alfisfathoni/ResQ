@@ -2,6 +2,7 @@ package com.example.resq.data
 
 import android.content.Context
 import android.content.SharedPreferences
+import com.example.resq.ui.model.Community
 import com.example.resq.ui.model.EmergencyContact
 
 /**
@@ -20,6 +21,7 @@ class UserSessionManager(context: Context) {
         private const val KEY_USER_NAME = "user_name"
         private const val KEY_USER_PHONE = "user_phone"
         private const val KEY_EMERGENCY_CONTACTS = "emergency_contacts"
+        private const val KEY_COMMUNITIES = "communities"
     }
 
     /**
@@ -94,6 +96,61 @@ class UserSessionManager(context: Context) {
         // If not already in list, add it
         current.add(contact)
         saveEmergencyContacts(current)
+    }
+
+    fun removeEmergencyContact(contactId: Int) {
+        val updated = getEmergencyContacts().filter { it.id != contactId }
+        saveEmergencyContacts(updated)
+    }
+
+    // ── Communities ────────────────────────────────────────────────────────────
+
+    /**
+     * Returns all saved communities.
+     * Format: "id:name:memberId1,memberId2,...;;;id:name:..."
+     */
+    fun getCommunities(): List<Community> {
+        val raw = prefs.getString(KEY_COMMUNITIES, null) ?: return emptyList()
+        return try {
+            raw.split(";;;").filter { it.isNotBlank() }.map { item ->
+                val parts = item.split(":")
+                val id = parts.getOrElse(0) { "0" }.toIntOrNull() ?: 0
+                val name = parts.getOrElse(1) { "Community" }
+                val memberIds = parts.getOrElse(2) { "" }
+                    .split(",")
+                    .filter { it.isNotBlank() }
+                    .mapNotNull { it.toIntOrNull() }
+                Community(id = id, name = name, memberIds = memberIds)
+            }
+        } catch (_: Exception) {
+            emptyList()
+        }
+    }
+
+    fun saveCommunities(communities: List<Community>) {
+        val raw = communities.joinToString(";;;") { c ->
+            "${c.id}:${c.name}:${c.memberIds.joinToString(",")}"
+        }
+        prefs.edit().putString(KEY_COMMUNITIES, raw).apply()
+    }
+
+    fun addCommunity(community: Community) {
+        val current = getCommunities().toMutableList()
+        val nextId = (current.maxOfOrNull { it.id } ?: 0) + 1
+        current.add(community.copy(id = nextId))
+        saveCommunities(current)
+    }
+
+    fun updateCommunityMembers(communityId: Int, memberIds: List<Int>) {
+        val updated = getCommunities().map { c ->
+            if (c.id == communityId) c.copy(memberIds = memberIds) else c
+        }
+        saveCommunities(updated)
+    }
+
+    fun removeCommunity(communityId: Int) {
+        val updated = getCommunities().filter { it.id != communityId }
+        saveCommunities(updated)
     }
 
     /**
