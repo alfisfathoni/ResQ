@@ -54,6 +54,7 @@ class ProfileFragment : Fragment() {
                                 "profile" -> { /* already on profile */ }
                             }
                         },
+                        onCommunityFabClick = { navHost?.navigateToCompanion() },
                         onLogout          = {
                             sessionManager.clearSession()
                             Toast.makeText(requireContext(), "Berhasil logout", Toast.LENGTH_SHORT).show()

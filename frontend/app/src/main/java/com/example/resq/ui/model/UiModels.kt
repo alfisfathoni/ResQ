@@ -33,3 +33,12 @@ data class EmergencyContact(
     val relationship: String = "Family",
     val phone       : String,
 )
+
+/**
+ * Data class for a Companion Community group.
+ */
+data class Community(
+    val id         : Int,
+    val name       : String,
+    val memberIds  : List<Int> = emptyList(), // IDs matching EmergencyContact.id
+)

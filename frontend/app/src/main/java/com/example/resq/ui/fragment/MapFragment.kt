@@ -36,6 +36,7 @@ class MapFragment : Fragment() {
                                 "profile" -> navHost?.navigateToProfile()
                             }
                         },
+                        onCommunityFabClick = { navHost?.navigateToCompanion() },
                     )
                 }
             }

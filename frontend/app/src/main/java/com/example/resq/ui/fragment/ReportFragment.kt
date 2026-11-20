@@ -36,6 +36,7 @@ class ReportFragment : Fragment() {
                                 "profile" -> navHost?.navigateToProfile()
                             }
                         },
+                        onCommunityFabClick = { navHost?.navigateToCompanion() },
                     )
                 }
             }

@@ -66,11 +66,7 @@ class HomeFragment : Fragment() {
                             }
                         },
                         onCommunityFabClick = {
-                            Toast.makeText(
-                                requireContext(),
-                                "Opening Community…",
-                                Toast.LENGTH_SHORT,
-                            ).show()
+                            navHost?.navigateToCompanion()
                         },
                     )
                 }

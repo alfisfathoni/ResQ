@@ -87,6 +87,7 @@ fun ProfileScreen(
     emergencyContacts : List<EmergencyContact> = emptyList(),
     onAddContactClick : () -> Unit             = {},
     onNavItemSelected : (String) -> Unit        = {},
+    onCommunityFabClick : () -> Unit           = {},
     onLogout          : () -> Unit             = {},
 ) {
     val context = LocalContext.current
@@ -178,6 +179,7 @@ fun ProfileScreen(
         ResQBottomNavBar(
             selectedRoute  = "profile",
             onItemSelected = onNavItemSelected,
+            onFabClick     = onCommunityFabClick,
             modifier       = Modifier.align(Alignment.BottomCenter),
         )
     }

@@ -11,5 +11,6 @@ interface NavigationHost {
     fun navigateToMap()
     fun navigateToReport()
     fun navigateToProfile()
+    fun navigateToCompanion()
     fun navigateToEmergencyContact(step: Int)
 }

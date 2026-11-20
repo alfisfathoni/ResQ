@@ -5,6 +5,7 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.commit
 import com.example.resq.ui.fragment.AuthFragment
+import com.example.resq.ui.fragment.CompanionFragment
 import com.example.resq.ui.fragment.HomeFragment
 import com.example.resq.ui.fragment.MapFragment
 import com.example.resq.ui.fragment.ProfileFragment
@@ -54,6 +55,10 @@ class MainActivity : AppCompatActivity(), NavigationHost {
 
     override fun navigateToProfile() {
         replaceFragment(ProfileFragment(), addToBackStack = false)
+    }
+
+    override fun navigateToCompanion() {
+        replaceFragment(CompanionFragment(), addToBackStack = false)
     }
 
     override fun navigateToEmergencyContact(step: Int) {
