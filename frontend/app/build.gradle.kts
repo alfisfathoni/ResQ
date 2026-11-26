@@ -60,6 +60,9 @@ dependencies {
     implementation(libs.androidx.compose.material.icons.extended)
     implementation(libs.androidx.lifecycle.runtime.compose)
 
+    // OSMDroid — OpenStreetMap (no API key required)
+    implementation("org.osmdroid:osmdroid-android:6.1.20")
+
     // Legacy / Material
     implementation(libs.androidx.appcompat)
     implementation(libs.material)
